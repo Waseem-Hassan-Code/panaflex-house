@@ -14,6 +14,7 @@ import {
   Alert,
   Divider,
 } from "@mui/material";
+import { toast } from "sonner";
 import { Client, Invoice } from "@/types";
 
 interface ReceivePaymentDialogProps {
@@ -77,9 +78,18 @@ export default function ReceivePaymentDialog({
         throw new Error(data.error || "Failed to receive payment");
       }
 
+      const data = await response.json();
+      toast.success("Payment Received Successfully!", {
+        description: `Receipt: ${
+          data.receiptNumber
+        } | Amount: Rs. ${paymentAmount.toLocaleString()}`,
+      });
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error("Failed to receive payment", {
+        description: err instanceof Error ? err.message : "An error occurred",
+      });
     } finally {
       setLoading(false);
     }

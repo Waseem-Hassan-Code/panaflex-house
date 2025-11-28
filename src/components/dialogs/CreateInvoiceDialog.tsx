@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { toast } from "sonner";
 import { Client } from "@/types";
 
 interface InvoiceItem {
@@ -136,9 +137,18 @@ export default function CreateInvoiceDialog({
         throw new Error(data.error || "Failed to create invoice");
       }
 
+      const data = await response.json();
+      toast.success("Invoice Created Successfully!", {
+        description: `Invoice: ${
+          data.invoiceNumber
+        } | Total: Rs. ${totalAmount.toLocaleString()}`,
+      });
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error("Failed to create invoice", {
+        description: err instanceof Error ? err.message : "An error occurred",
+      });
     } finally {
       setLoading(false);
     }

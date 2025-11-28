@@ -21,6 +21,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
 import { PhoneInput } from "@/components/common/MaskedInput";
@@ -193,14 +194,26 @@ export default function UserManagementPage() {
 
   const handleToggleActive = async (user: User) => {
     try {
-      await fetch(`/api/users/${user.id}`, {
+      const response = await fetch(`/api/users/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !user.isActive }),
       });
-      setRefreshKey((k) => k + 1);
+      if (response.ok) {
+        setRefreshKey((k) => k + 1);
+        toast.success(user.isActive ? "User Deactivated" : "User Activated", {
+          description: `${user.name} has been ${
+            user.isActive ? "deactivated" : "activated"
+          } successfully.`,
+        });
+      } else {
+        toast.error("Failed to update user status");
+      }
     } catch (error) {
       console.error("Error toggling user status:", error);
+      toast.error("Connection Error", {
+        description: "Unable to connect to the server.",
+      });
     }
   };
 
@@ -222,6 +235,14 @@ export default function UserManagementPage() {
         if (response.ok) {
           handleCloseDialog();
           setRefreshKey((k) => k + 1);
+          toast.success(`User "${formData.name}" updated successfully!`, {
+            description: "The user information has been updated.",
+          });
+        } else {
+          const error = await response.json();
+          toast.error("Failed to update user", {
+            description: error.error || "An unexpected error occurred.",
+          });
         }
       } else {
         const response = await fetch(url, {
@@ -233,10 +254,31 @@ export default function UserManagementPage() {
         if (response.ok) {
           handleCloseDialog();
           setRefreshKey((k) => k + 1);
+          toast.success(
+            editUser
+              ? `User "${formData.name}" updated successfully!`
+              : `User "${formData.name}" created successfully!`,
+            {
+              description: editUser
+                ? "The user information has been updated."
+                : `Email: ${formData.email} | Role: ${formData.role}`,
+            }
+          );
+        } else {
+          const error = await response.json();
+          toast.error(
+            editUser ? "Failed to update user" : "Failed to create user",
+            {
+              description: error.error || "An unexpected error occurred.",
+            }
+          );
         }
       }
     } catch (error) {
       console.error("Error saving user:", error);
+      toast.error("Connection Error", {
+        description: "Unable to connect to the server.",
+      });
     }
   };
 

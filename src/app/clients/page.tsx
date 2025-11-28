@@ -18,6 +18,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
 import { PhoneInput, CNICInput } from "@/components/common/MaskedInput";
@@ -173,11 +174,32 @@ export default function ClientsPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         handleCloseDialog();
         setRefreshKey((k) => k + 1);
+        toast.success(
+          editClient
+            ? `Client "${formData.name}" updated successfully!`
+            : `Client "${data.clientId}" created successfully!`,
+          {
+            description: editClient
+              ? "The client information has been updated."
+              : `Name: ${formData.name} | Phone: ${formData.phone}`,
+          }
+        );
+      } else {
+        const error = await response.json();
+        toast.error("Failed to save client", {
+          description:
+            error.error || "An unexpected error occurred. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error saving client:", error);
+      toast.error("Connection Error", {
+        description:
+          "Unable to connect to the server. Please check your connection.",
+      });
     }
   };
 
