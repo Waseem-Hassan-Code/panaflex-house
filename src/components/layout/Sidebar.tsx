@@ -127,7 +127,7 @@ export default function Sidebar() {
             WebkitTextFillColor: "transparent",
           }}
         >
-          Panaflex House
+          Waseem Kobra
         </Typography>
       </Box>
 
