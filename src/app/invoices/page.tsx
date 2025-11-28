@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
+import { MainLayout } from "@/components/layout";
 import { Invoice } from "@/types";
 
 export default function InvoicesPage() {
@@ -106,7 +107,7 @@ export default function InvoicesPage() {
   ];
 
   return (
-    <Box>
+    <MainLayout>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">
           Invoices
@@ -136,6 +137,6 @@ export default function InvoicesPage() {
         onRowClick={(row) => router.push(`/invoices/${row.id}`)}
         searchPlaceholder="Search by invoice #, client name..."
       />
-    </Box>
+    </MainLayout>
   );
 }

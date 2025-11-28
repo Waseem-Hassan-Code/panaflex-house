@@ -6,20 +6,58 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // ============================================
-// ENUMS (SQLite doesn't support enums natively, using String with validation)
+// ENUMS
 // ============================================
+
+enum Role {
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  CHEQUE
+  ONLINE
+}
+
+enum EntityType {
+  CLIENT
+  INVOICE
+  PAYMENT
+  USER
+}
+
+enum ActionType {
+  CREATE
+  UPDATE
+  DELETE
+  PAYMENT_RECEIVED
+  STATUS_CHANGE
+  ACTIVATE
+  DEACTIVATE
+}
 
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   name         String
   password     String
-  role         String   @default("VIEWER") // ADMIN, MANAGER, OPERATOR, VIEWER
+  role         Role     @default(VIEWER)
   avatar       String?
   phone        String?
   address      String?
@@ -85,8 +123,8 @@ model Invoice {
   paidAmount      Float    @default(0)
   balanceDue      Float    @default(0) // totalAmount - paidAmount
   
-  // Status: UNPAID, PARTIAL, PAID, CANCELLED
-  status          String   @default("UNPAID")
+  // Status
+  status          InvoiceStatus @default(UNPAID)
   
   notes           String?
   createdAt       DateTime @default(now())
@@ -129,18 +167,18 @@ model InvoiceItem {
 }
 
 model PaymentReceived {
-  id            String   @id @default(uuid())
-  receiptNumber String   @unique // Auto-generated: REC_001, REC_002, etc.
+  id            String        @id @default(uuid())
+  receiptNumber String        @unique // Auto-generated: REC_001, REC_002, etc.
   clientId      String
-  client        Client   @relation(fields: [clientId], references: [id])
+  client        Client        @relation(fields: [clientId], references: [id])
   invoiceId     String
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
   amount        Float
-  paymentDate   DateTime @default(now())
-  paymentMethod String   @default("CASH") // CASH, BANK, CHEQUE, ONLINE
-  reference     String?  // Cheque number, transaction ID, etc.
+  paymentDate   DateTime      @default(now())
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?       // Cheque number, transaction ID, etc.
   notes         String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime      @default(now())
 
   // Audit fields (only created, not editable)
   createdById   String
@@ -150,14 +188,14 @@ model PaymentReceived {
 }
 
 model TransactionLog {
-  id          String   @id @default(uuid())
-  entityType  String   // CLIENT, INVOICE, PAYMENT, USER
-  entityId    String   // ID of the entity
-  action      String   // CREATE, UPDATE, DELETE, PAYMENT_RECEIVED, STATUS_CHANGE
-  details     String   // JSON string with change details
+  id          String     @id @default(uuid())
+  entityType  EntityType // CLIENT, INVOICE, PAYMENT, USER
+  entityId    String     // ID of the entity
+  action      ActionType // CREATE, UPDATE, DELETE, PAYMENT_RECEIVED, STATUS_CHANGE
+  details     Json       // JSON data with change details
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
+  user        User       @relation(fields: [userId], references: [id])
+  createdAt   DateTime   @default(now())
 
   @@index([entityType, entityId])
   @@index([userId])

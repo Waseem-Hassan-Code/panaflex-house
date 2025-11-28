@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
+import { PhoneInput, CNICInput } from "@/components/common/MaskedInput";
+import { MainLayout } from "@/components/layout";
 import { Client } from "@/types";
 
 export default function ClientsPage() {
@@ -63,17 +65,17 @@ export default function ClientsPage() {
     },
     {
       id: "name",
-      label: t("common.name"),
+      label: "Name",
       minWidth: 150,
     },
     {
       id: "phone",
-      label: t("common.phone"),
+      label: "Phone",
       minWidth: 130,
     },
     {
       id: "email",
-      label: t("common.email"),
+      label: "Email",
       minWidth: 180,
     },
     {
@@ -85,7 +87,7 @@ export default function ClientsPage() {
     },
     {
       id: "isActive",
-      label: t("common.status"),
+      label: "Status",
       minWidth: 100,
       format: (value) => <StatusBadge status={value ? "ACTIVE" : "INACTIVE"} />,
     },
@@ -97,7 +99,7 @@ export default function ClientsPage() {
     },
     {
       id: "actions",
-      label: t("common.actions"),
+      label: "Actions",
       minWidth: 100,
       align: "center",
       sortable: false,
@@ -180,7 +182,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <Box>
+    <MainLayout>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">
           {t("clients.title", "Clients")}
@@ -216,7 +218,7 @@ export default function ClientsPage() {
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             <TextField
-              label={t("common.name")}
+              label="Name"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
@@ -224,34 +226,31 @@ export default function ClientsPage() {
               required
               fullWidth
             />
-            <TextField
-              label={t("common.phone")}
+            <PhoneInput
+              label="Phone"
               value={formData.phone}
-              onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
-              }
+              onChange={(value) => setFormData({ ...formData, phone: value })}
               required
               fullWidth
             />
             <TextField
-              label={t("common.email")}
+              label="Email"
               type="email"
               value={formData.email}
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
+              placeholder="example@email.com"
               fullWidth
             />
-            <TextField
+            <CNICInput
               label="CNIC"
               value={formData.cnic}
-              onChange={(e) =>
-                setFormData({ ...formData, cnic: e.target.value })
-              }
+              onChange={(value) => setFormData({ ...formData, cnic: value })}
               fullWidth
             />
             <TextField
-              label={t("common.address")}
+              label="Address"
               value={formData.address}
               onChange={(e) =>
                 setFormData({ ...formData, address: e.target.value })
@@ -263,16 +262,16 @@ export default function ClientsPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>{t("common.cancel")}</Button>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleSubmit}
             disabled={!formData.name || !formData.phone}
           >
-            {t("common.save")}
+            Save
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </MainLayout>
   );
 }

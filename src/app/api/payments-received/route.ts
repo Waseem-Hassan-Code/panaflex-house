@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
           entityId: payment.id,
           action: "PAYMENT_RECEIVED",
           userId: session.user.id,
-          details: JSON.stringify({
+          details: {
             receiptNumber: payment.receiptNumber,
             invoiceNumber: invoice.invoiceNumber,
             clientName: invoice.client.name,
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
             paymentMethod: payment.paymentMethod,
             newInvoiceStatus: newStatus,
             remainingBalance: Math.max(0, newBalanceDue),
-          }),
+          },
         },
       });
 

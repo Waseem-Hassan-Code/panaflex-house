@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getNextSequence } from "@/lib/sequences";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { Prisma, InvoiceStatus } from "@prisma/client";
 
 // GET - List invoices with pagination
 export async function GET(request: NextRequest) {
@@ -11,26 +12,14 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "10");
     const clientId = searchParams.get("clientId");
-    const status = searchParams.get("status");
+    const status = searchParams.get("status") as InvoiceStatus | null;
     const search = searchParams.get("search") || "";
     const sortBy = searchParams.get("sortBy") || "createdAt";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
     const skip = (page - 1) * pageSize;
 
-    interface WhereClause {
-      clientId?: string;
-      status?: string;
-      OR?: Array<{
-        invoiceNumber?: { contains: string };
-        client?: {
-          name?: { contains: string };
-          clientId?: { contains: string };
-        };
-      }>;
-    }
-
-    const where: WhereClause = {};
+    const where: Prisma.InvoiceWhereInput = {};
 
     if (clientId) {
       where.clientId = clientId;
@@ -42,9 +31,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { invoiceNumber: { contains: search } },
-        { client: { name: { contains: search } } },
-        { client: { clientId: { contains: search } } },
+        { invoiceNumber: { contains: search, mode: "insensitive" } },
+        { client: { name: { contains: search, mode: "insensitive" } } },
+        { client: { clientId: { contains: search, mode: "insensitive" } } },
       ];
     }
 
@@ -192,13 +181,13 @@ export async function POST(request: NextRequest) {
         entityId: invoice.id,
         action: "CREATE",
         userId: session.user.id,
-        details: JSON.stringify({
+        details: {
           invoiceNumber: invoice.invoiceNumber,
           clientName: client.name,
           totalAmount: invoice.totalAmount,
           previousBalance: invoice.previousBalance,
           itemsCount: items.length,
-        }),
+        },
       },
     });
 

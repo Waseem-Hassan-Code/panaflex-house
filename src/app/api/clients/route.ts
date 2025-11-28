@@ -120,11 +120,11 @@ export async function POST(request: NextRequest) {
         entityId: client.id,
         action: "CREATE",
         userId: session.user.id,
-        details: JSON.stringify({
+        details: {
           clientId: client.clientId,
           name: client.name,
           phone: client.phone,
-        }),
+        },
       },
     });
 

@@ -92,11 +92,11 @@ export async function PUT(
           entityId: id,
           action: "STATUS_CHANGE",
           userId: session.user.id,
-          details: JSON.stringify({
+          details: {
             invoiceNumber: existingInvoice.invoiceNumber,
             from: existingInvoice.status,
             to: "CANCELLED",
-          }),
+          },
         },
       });
 
@@ -168,12 +168,12 @@ export async function PUT(
           entityId: id,
           action: "UPDATE",
           userId: session.user.id,
-          details: JSON.stringify({
+          details: {
             invoiceNumber: invoice.invoiceNumber,
             subtotal: invoice.subtotal,
             totalAmount: invoice.totalAmount,
             itemsCount: items.length,
-          }),
+          },
         },
       });
 

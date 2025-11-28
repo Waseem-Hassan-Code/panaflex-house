@@ -69,15 +69,36 @@ export default function DashboardPage() {
     );
   }
 
-  // Demo data for charts if no real data
-  const demoPaymentData = stats?.dailyPayments?.length
-    ? stats.dailyPayments
-    : Array.from({ length: 14 }, (_, i) => ({
-        date: new Date(Date.now() - (13 - i) * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        amount: Math.floor(Math.random() * 50000) + 10000,
-      }));
+  // Generate dates for last 14 days
+  const generateLast14Days = () => {
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      days.push(date.toISOString().split("T")[0]);
+    }
+    return days;
+  };
+
+  // Merge real data with all dates to ensure continuous chart
+  const last14Days = generateLast14Days();
+
+  const paymentChartData = last14Days.map((date) => {
+    const found = stats?.dailyPayments?.find((p) => p.date === date);
+    return {
+      date,
+      amount: found?.amount || 0,
+    };
+  });
+
+  const invoiceChartData = last14Days.map((date) => {
+    const found = stats?.dailyInvoices?.find((i) => i.date === date);
+    return {
+      date,
+      count: found?.count || 0,
+      amount: found?.amount || 0,
+    };
+  });
 
   return (
     <MainLayout>
@@ -135,9 +156,26 @@ export default function DashboardPage() {
 
         {/* Charts Row */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid size={{ xs: 12, lg: 8 }}>
-            <PaymentChart data={demoPaymentData} />
+          <Grid size={{ xs: 12, lg: 6 }}>
+            <PaymentChart
+              data={paymentChartData}
+              title="Daily Payments (Last 14 Days)"
+            />
           </Grid>
+          <Grid size={{ xs: 12, lg: 6 }}>
+            <PaymentChart
+              data={invoiceChartData.map((d) => ({
+                date: d.date,
+                amount: d.amount,
+              }))}
+              title="Daily Invoice Amounts (Last 14 Days)"
+              color="#ff9800"
+            />
+          </Grid>
+        </Grid>
+
+        {/* Quick Stats Row */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, lg: 4 }}>
             <Paper sx={{ p: 3, height: "100%" }}>
               <Typography variant="h6" gutterBottom>
@@ -170,6 +208,40 @@ export default function DashboardPage() {
                     {stats?.totalInvoicesThisMonth || 0}
                   </Typography>
                 </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    mb: 2,
+                  }}
+                >
+                  <Typography color="text.secondary">
+                    Total Received (14 days)
+                  </Typography>
+                  <Typography fontWeight={500} color="success.main">
+                    Rs.{" "}
+                    {paymentChartData
+                      .reduce((sum, d) => sum + d.amount, 0)
+                      .toLocaleString()}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    mb: 2,
+                  }}
+                >
+                  <Typography color="text.secondary">
+                    Total Invoiced (14 days)
+                  </Typography>
+                  <Typography fontWeight={500} color="warning.main">
+                    Rs.{" "}
+                    {invoiceChartData
+                      .reduce((sum, d) => sum + d.amount, 0)
+                      .toLocaleString()}
+                  </Typography>
+                </Box>
               </Box>
               <Box sx={{ mt: 3 }}>
                 <Button
@@ -190,11 +262,9 @@ export default function DashboardPage() {
               </Box>
             </Paper>
           </Grid>
-        </Grid>
 
-        {/* Recent Activity Row */}
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, lg: 6 }}>
+          {/* Recent Invoices */}
+          <Grid size={{ xs: 12, lg: 8 }}>
             <Paper sx={{ p: 3 }}>
               <Box
                 sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
@@ -247,7 +317,11 @@ export default function DashboardPage() {
               </TableContainer>
             </Paper>
           </Grid>
-          <Grid size={{ xs: 12, lg: 6 }}>
+        </Grid>
+
+        {/* Recent Payments */}
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12 }}>
             <Paper sx={{ p: 3 }}>
               <Box
                 sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
@@ -266,6 +340,7 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableCell>Receipt #</TableCell>
                       <TableCell>Client</TableCell>
+                      <TableCell>Invoice</TableCell>
                       <TableCell align="right">Amount</TableCell>
                       <TableCell>Date</TableCell>
                     </TableRow>
@@ -277,6 +352,9 @@ export default function DashboardPage() {
                         <TableRow key={payment.id} hover>
                           <TableCell>{payment.receiptNumber}</TableCell>
                           <TableCell>{payment.client?.name}</TableCell>
+                          <TableCell>
+                            {payment.invoice?.invoiceNumber}
+                          </TableCell>
                           <TableCell
                             align="right"
                             sx={{ color: "success.main" }}
@@ -291,7 +369,7 @@ export default function DashboardPage() {
                     {(!stats?.recentPayments ||
                       stats.recentPayments.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={4} align="center">
+                        <TableCell colSpan={5} align="center">
                           No payments yet
                         </TableCell>
                       </TableRow>

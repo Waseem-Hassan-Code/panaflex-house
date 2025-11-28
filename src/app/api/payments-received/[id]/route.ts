@@ -57,13 +57,13 @@ export async function DELETE(
           entityId: id,
           action: "DELETE",
           userId: session.user.id,
-          details: JSON.stringify({
+          details: {
             receiptNumber: payment.receiptNumber,
             invoiceNumber: payment.invoice.invoiceNumber,
             clientName: payment.client.name,
             amount: payment.amount,
             reason: "Payment deleted",
-          }),
+          },
         },
       });
     });

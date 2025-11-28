@@ -10,17 +10,21 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
+  Area,
+  AreaChart,
 } from "recharts";
-import { useTranslation } from "react-i18next";
 
 interface PaymentChartProps {
   data: { date: string; amount: number }[];
+  title?: string;
+  color?: string;
 }
 
-export default function PaymentChart({ data }: PaymentChartProps) {
-  const { t } = useTranslation("common");
-
+export default function PaymentChart({
+  data,
+  title = "Daily Payments",
+  color = "#1a237e",
+}: PaymentChartProps) {
   // Format data for display
   const formattedData = data.map((item) => ({
     ...item,
@@ -29,6 +33,9 @@ export default function PaymentChart({ data }: PaymentChartProps) {
       day: "numeric",
     }),
   }));
+
+  // Calculate total for display
+  const total = data.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <Card
@@ -39,29 +46,55 @@ export default function PaymentChart({ data }: PaymentChartProps) {
       }}
     >
       <CardContent sx={{ p: 3 }}>
-        <Typography
-          variant="h6"
+        <Box
           sx={{
-            fontWeight: 600,
-            color: "#1a237e",
-            mb: 3,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
           }}
         >
-          {t("dashboard.daily_payment_trend")}
-        </Typography>
-        <Box sx={{ width: "100%", height: 300 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+              color: color,
+            }}
+          >
+            {title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Total:{" "}
+            <strong style={{ color }}>Rs. {total.toLocaleString()}</strong>
+          </Typography>
+        </Box>
+        <Box sx={{ width: "100%", height: 280 }}>
           <ResponsiveContainer>
-            <LineChart data={formattedData}>
+            <AreaChart data={formattedData}>
+              <defs>
+                <linearGradient
+                  id={`gradient-${color.replace("#", "")}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 12, fill: "#666" }}
+                tick={{ fontSize: 11, fill: "#666" }}
                 axisLine={{ stroke: "#e0e0e0" }}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: "#666" }}
+                tick={{ fontSize: 11, fill: "#666" }}
                 axisLine={{ stroke: "#e0e0e0" }}
-                tickFormatter={(value) => `Rs ${value / 1000}k`}
+                tickFormatter={(value) =>
+                  value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
+                }
               />
               <Tooltip
                 contentStyle={{
@@ -71,21 +104,18 @@ export default function PaymentChart({ data }: PaymentChartProps) {
                   boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
                 }}
                 formatter={(value: number) => [
-                  `Rs ${value.toLocaleString()}`,
+                  `Rs. ${value.toLocaleString()}`,
                   "Amount",
                 ]}
               />
-              <Legend />
-              <Line
+              <Area
                 type="monotone"
                 dataKey="amount"
-                stroke="#1a237e"
-                strokeWidth={3}
-                dot={{ fill: "#1a237e", strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, fill: "#283593" }}
-                name="Payment Amount"
+                stroke={color}
+                strokeWidth={2}
+                fill={`url(#gradient-${color.replace("#", "")})`}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </Box>
       </CardContent>

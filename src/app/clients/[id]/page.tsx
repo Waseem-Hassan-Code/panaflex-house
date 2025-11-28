@@ -32,6 +32,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import StatusBadge from "@/components/common/StatusBadge";
+import { MainLayout } from "@/components/layout";
 import { Client, Invoice, PaymentReceived } from "@/types";
 import ReceivePaymentDialog from "@/components/dialogs/ReceivePaymentDialog";
 import CreateInvoiceDialog from "@/components/dialogs/CreateInvoiceDialog";
@@ -104,24 +105,28 @@ export default function ClientDetailPage({
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <MainLayout>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress />
+        </Box>
+      </MainLayout>
     );
   }
 
   if (error || !client) {
     return (
-      <Box sx={{ py: 4 }}>
-        <Alert severity="error">{error || "Client not found"}</Alert>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.back()}
-          sx={{ mt: 2 }}
-        >
-          Go Back
-        </Button>
-      </Box>
+      <MainLayout>
+        <Box sx={{ py: 4 }}>
+          <Alert severity="error">{error || "Client not found"}</Alert>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => router.back()}
+            sx={{ mt: 2 }}
+          >
+            Go Back
+          </Button>
+        </Box>
+      </MainLayout>
     );
   }
 
@@ -185,7 +190,7 @@ export default function ClientDetailPage({
   });
 
   return (
-    <Box>
+    <MainLayout>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
         <IconButton onClick={() => router.back()}>
@@ -580,6 +585,6 @@ export default function ClientDetailPage({
           onSuccess={handleInvoiceSuccess}
         />
       )}
-    </Box>
+    </MainLayout>
   );
 }

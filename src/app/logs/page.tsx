@@ -3,6 +3,7 @@
 import { Box, Typography, MenuItem, TextField, Chip } from "@mui/material";
 import { useState } from "react";
 import DataGrid, { Column } from "@/components/common/DataGrid";
+import { MainLayout } from "@/components/layout";
 import { TransactionLog } from "@/types";
 
 const entityTypeColors = {
@@ -120,7 +121,7 @@ export default function TransactionLogsPage() {
   ];
 
   return (
-    <Box>
+    <MainLayout>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight="bold">
@@ -156,6 +157,6 @@ export default function TransactionLogsPage() {
         initialSortBy="createdAt"
         initialSortOrder="desc"
       />
-    </Box>
+    </MainLayout>
   );
 }

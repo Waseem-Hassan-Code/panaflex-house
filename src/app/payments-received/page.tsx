@@ -4,6 +4,7 @@ import { Box, Typography, MenuItem, TextField } from "@mui/material";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import DataGrid, { Column } from "@/components/common/DataGrid";
+import { MainLayout } from "@/components/layout";
 import { PaymentReceived } from "@/types";
 
 export default function PaymentsReceivedPage() {
@@ -84,7 +85,7 @@ export default function PaymentsReceivedPage() {
   ];
 
   return (
-    <Box>
+    <MainLayout>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">
           Payments Received
@@ -114,6 +115,6 @@ export default function PaymentsReceivedPage() {
         onRowClick={(row) => router.push(`/invoices/${row.invoiceId}`)}
         searchPlaceholder="Search by receipt #, client name..."
       />
-    </Box>
+    </MainLayout>
   );
 }

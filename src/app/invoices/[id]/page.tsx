@@ -24,6 +24,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import PrintIcon from "@mui/icons-material/Print";
 import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/common/StatusBadge";
+import { MainLayout } from "@/components/layout";
 import { Invoice, Client } from "@/types";
 import ReceivePaymentDialog from "@/components/dialogs/ReceivePaymentDialog";
 
@@ -70,29 +71,33 @@ export default function InvoiceDetailPage({
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <MainLayout>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress />
+        </Box>
+      </MainLayout>
     );
   }
 
   if (error || !invoice) {
     return (
-      <Box sx={{ py: 4 }}>
-        <Alert severity="error">{error || "Invoice not found"}</Alert>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.back()}
-          sx={{ mt: 2 }}
-        >
-          Go Back
-        </Button>
-      </Box>
+      <MainLayout>
+        <Box sx={{ py: 4 }}>
+          <Alert severity="error">{error || "Invoice not found"}</Alert>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => router.back()}
+            sx={{ mt: 2 }}
+          >
+            Go Back
+          </Button>
+        </Box>
+      </MainLayout>
     );
   }
 
   return (
-    <Box>
+    <MainLayout>
       {/* Header */}
       <Box
         sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}
@@ -363,6 +368,6 @@ export default function InvoiceDetailPage({
           }
         }
       `}</style>
-    </Box>
+    </MainLayout>
   );
 }

@@ -101,7 +101,7 @@ export async function PUT(
         entityId: client.id,
         action: "UPDATE",
         userId: session.user.id,
-        details: JSON.stringify({
+        details: {
           before: {
             name: existingClient.name,
             phone: existingClient.phone,
@@ -112,7 +112,7 @@ export async function PUT(
             phone: client.phone,
             email: client.email,
           },
-        }),
+        },
       },
     });
 
@@ -153,10 +153,10 @@ export async function DELETE(
         entityId: id,
         action: "DEACTIVATE",
         userId: session.user.id,
-        details: JSON.stringify({
+        details: {
           clientId: client.clientId,
           name: client.name,
-        }),
+        },
       },
     });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma, EntityType } from "@prisma/client";
 
 // GET - Transaction logs with pagination
 export async function GET(request: NextRequest) {
@@ -7,7 +8,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "20");
-    const entityType = searchParams.get("entityType");
+    const entityType = searchParams.get("entityType") as EntityType | null;
     const entityId = searchParams.get("entityId");
     const userId = searchParams.get("userId");
     const startDate = searchParams.get("startDate");
@@ -16,17 +17,7 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * pageSize;
 
-    interface WhereClause {
-      entityType?: string;
-      entityId?: string;
-      userId?: string;
-      createdAt?: {
-        gte?: Date;
-        lte?: Date;
-      };
-    }
-
-    const where: WhereClause = {};
+    const where: Prisma.TransactionLogWhereInput = {};
 
     if (entityType) {
       where.entityType = entityType;
@@ -63,14 +54,8 @@ export async function GET(request: NextRequest) {
       prisma.transactionLog.count({ where }),
     ]);
 
-    // Parse JSON details
-    const parsedLogs = logs.map((log) => ({
-      ...log,
-      details: JSON.parse(log.details),
-    }));
-
     return NextResponse.json({
-      data: parsedLogs,
+      data: logs,
       total,
       page,
       pageSize,

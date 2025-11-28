@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 
 export type EntityType = "CLIENT" | "INVOICE" | "PAYMENT" | "USER";
 export type ActionType =
@@ -27,7 +28,7 @@ export async function createTransactionLog(
       entityId,
       action,
       userId,
-      details: JSON.stringify(details),
+      details: details as Prisma.InputJsonValue,
     },
   });
 }
@@ -58,10 +59,7 @@ export async function getEntityLogs(
   ]);
 
   return {
-    logs: logs.map((log) => ({
-      ...log,
-      details: JSON.parse(log.details),
-    })),
+    logs,
     total,
     page,
     pageSize,
@@ -115,10 +113,7 @@ export async function getAllLogs(
   ]);
 
   return {
-    logs: logs.map((log) => ({
-      ...log,
-      details: JSON.parse(log.details),
-    })),
+    logs,
     total,
     page,
     pageSize,

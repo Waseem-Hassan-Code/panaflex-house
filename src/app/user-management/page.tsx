@@ -23,6 +23,8 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useTranslation } from "react-i18next";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
+import { PhoneInput } from "@/components/common/MaskedInput";
+import { MainLayout } from "@/components/layout";
 import { User, Role } from "@/types";
 
 const roles: Role[] = ["ADMIN", "MANAGER", "OPERATOR", "VIEWER"];
@@ -64,12 +66,12 @@ export default function UserManagementPage() {
   const columns: Column<User>[] = [
     {
       id: "name",
-      label: t("common.name"),
+      label: "Name",
       minWidth: 150,
     },
     {
       id: "email",
-      label: t("common.email"),
+      label: "Email",
       minWidth: 200,
     },
     {
@@ -95,12 +97,12 @@ export default function UserManagementPage() {
     },
     {
       id: "phone",
-      label: t("common.phone"),
+      label: "Phone",
       minWidth: 130,
     },
     {
       id: "isActive",
-      label: t("common.status"),
+      label: "Status",
       minWidth: 100,
       format: (value) => <StatusBadge status={value ? "ACTIVE" : "INACTIVE"} />,
     },
@@ -118,7 +120,7 @@ export default function UserManagementPage() {
     },
     {
       id: "actions",
-      label: t("common.actions"),
+      label: "Actions",
       minWidth: 120,
       align: "center",
       sortable: false,
@@ -239,7 +241,7 @@ export default function UserManagementPage() {
   };
 
   return (
-    <Box>
+    <MainLayout>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight="bold">
@@ -275,7 +277,7 @@ export default function UserManagementPage() {
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             <TextField
-              label={t("common.name")}
+              label="Name"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
@@ -284,7 +286,7 @@ export default function UserManagementPage() {
               fullWidth
             />
             <TextField
-              label={t("common.email")}
+              label="Email"
               type="email"
               value={formData.email}
               onChange={(e) =>
@@ -293,6 +295,7 @@ export default function UserManagementPage() {
               required
               fullWidth
               disabled={!!editUser}
+              placeholder="example@email.com"
             />
             <TextField
               label="Password"
@@ -322,16 +325,14 @@ export default function UserManagementPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label={t("common.phone")}
+            <PhoneInput
+              label="Phone"
               value={formData.phone}
-              onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
-              }
+              onChange={(value) => setFormData({ ...formData, phone: value })}
               fullWidth
             />
             <TextField
-              label={t("common.address")}
+              label="Address"
               value={formData.address}
               onChange={(e) =>
                 setFormData({ ...formData, address: e.target.value })
@@ -356,7 +357,7 @@ export default function UserManagementPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>{t("common.cancel")}</Button>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleSubmit}
@@ -366,10 +367,10 @@ export default function UserManagementPage() {
               (!editUser && !formData.password)
             }
           >
-            {t("common.save")}
+            Save
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </MainLayout>
   );
 }
