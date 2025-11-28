@@ -1,0 +1,174 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS (SQLite doesn't support enums natively, using String with validation)
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  password     String
+  role         String   @default("VIEWER") // ADMIN, MANAGER, OPERATOR, VIEWER
+  avatar       String?
+  phone        String?
+  address      String?
+  isActive     Boolean  @default(true)
+  isSeeded     Boolean  @default(false) // Mark seeded accounts
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations for audit trail
+  createdClients    Client[]          @relation("ClientCreatedBy")
+  updatedClients    Client[]          @relation("ClientUpdatedBy")
+  createdInvoices   Invoice[]         @relation("InvoiceCreatedBy")
+  updatedInvoices   Invoice[]         @relation("InvoiceUpdatedBy")
+  createdPayments   PaymentReceived[] @relation("PaymentCreatedBy")
+  transactionLogs   TransactionLog[]
+  createdUsers      User[]            @relation("UserCreatedBy")
+  updatedUsers      User[]            @relation("UserUpdatedBy")
+  createdByUser     User?             @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdById       String?
+  updatedByUser     User?             @relation("UserUpdatedBy", fields: [updatedById], references: [id])
+  updatedById       String?
+
+  @@map("users")
+}
+
+model Client {
+  id           String   @id @default(uuid())
+  clientId     String   @unique // Auto-generated: CLIENT_001, CLIENT_002, etc.
+  name         String
+  email        String?
+  phone        String
+  address      String?
+  cnic         String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Audit fields
+  createdById  String
+  createdBy    User     @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  updatedById  String?
+  updatedBy    User?    @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
+
+  // Relations
+  invoices         Invoice[]
+  paymentsReceived PaymentReceived[]
+
+  @@map("clients")
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  invoiceNumber   String   @unique // Auto-generated: INV_001, INV_002, etc.
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  invoiceDate     DateTime @default(now())
+  dueDate         DateTime?
+  
+  // Amount calculations
+  subtotal        Float    @default(0)
+  previousBalance Float    @default(0) // Carried forward from previous invoices
+  totalAmount     Float    @default(0) // subtotal + previousBalance
+  paidAmount      Float    @default(0)
+  balanceDue      Float    @default(0) // totalAmount - paidAmount
+  
+  // Status: UNPAID, PARTIAL, PAID, CANCELLED
+  status          String   @default("UNPAID")
+  
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Audit fields
+  createdById     String
+  createdBy       User     @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedById     String?
+  updatedBy       User?    @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
+
+  // Relations
+  items            InvoiceItem[]
+  paymentsReceived PaymentReceived[]
+  
+  // Reference to previous invoice if balance carried forward
+  previousInvoiceId String?
+  previousInvoice   Invoice?  @relation("InvoiceCarryForward", fields: [previousInvoiceId], references: [id])
+  nextInvoices      Invoice[] @relation("InvoiceCarryForward")
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sNo         Int      // Serial number in the invoice
+  itemName    String
+  width       Float
+  height      Float
+  quantity    Int      @default(1)
+  sqf         Float    // Calculated: width * height * quantity
+  rate        Float    // Price per sqf
+  amount      Float    // Calculated: sqf * rate
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("invoice_items")
+}
+
+model PaymentReceived {
+  id            String   @id @default(uuid())
+  receiptNumber String   @unique // Auto-generated: REC_001, REC_002, etc.
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+  amount        Float
+  paymentDate   DateTime @default(now())
+  paymentMethod String   @default("CASH") // CASH, BANK, CHEQUE, ONLINE
+  reference     String?  // Cheque number, transaction ID, etc.
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  // Audit fields (only created, not editable)
+  createdById   String
+  createdBy     User     @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+
+  @@map("payments_received")
+}
+
+model TransactionLog {
+  id          String   @id @default(uuid())
+  entityType  String   // CLIENT, INVOICE, PAYMENT, USER
+  entityId    String   // ID of the entity
+  action      String   // CREATE, UPDATE, DELETE, PAYMENT_RECEIVED, STATUS_CHANGE
+  details     String   // JSON string with change details
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("transaction_logs")
+}
+
+// Sequence table for auto-generating IDs
+model Sequence {
+  id        String @id
+  value     Int    @default(0)
+  
+  @@map("sequences")
+}
