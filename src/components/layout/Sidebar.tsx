@@ -23,6 +23,7 @@ import {
   Person as PersonIcon,
   Settings as SettingsIcon,
   ManageAccounts as ManageAccountsIcon,
+  Bolt as BoltIcon,
 } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
@@ -52,6 +53,12 @@ export default function Sidebar() {
       icon: <DashboardIcon />,
       path: "/dashboard",
       permission: Permission.VIEW_DASHBOARD,
+    },
+    {
+      text: "Instant Invoice",
+      icon: <BoltIcon />,
+      path: "/instant-invoice",
+      permission: Permission.VIEW_PAYMENTS,
     },
     {
       text: "Clients",

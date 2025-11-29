@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
+import { getPhoneSearchVariants } from "@/lib/phoneUtils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,14 +21,18 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Add search filter if provided
+    // Add search filter if provided with smart phone search
     if (search) {
+      const phoneVariants = getPhoneSearchVariants(search);
       whereClause.AND = [
         {
           OR: [
             { name: { contains: search, mode: "insensitive" } },
             { clientId: { contains: search, mode: "insensitive" } },
-            { phone: { contains: search, mode: "insensitive" } },
+            // Add all phone format variants
+            ...phoneVariants.map((variant) => ({
+              phone: { contains: variant, mode: "insensitive" as const },
+            })),
           ],
         },
       ];

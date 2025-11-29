@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getPhoneSearchVariants } from "@/lib/phoneUtils";
 
 // Global search across clients, invoices, and payments
 export async function GET(request: NextRequest) {
@@ -12,15 +13,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
-    // Search clients
+    // Get phone variants for smart phone search
+    const phoneVariants = getPhoneSearchVariants(query);
+    const phoneConditions = phoneVariants.map((variant) => ({
+      phone: { contains: variant },
+    }));
+
+    // Search clients with smart phone search
     const clients = await prisma.client.findMany({
       where: {
         OR: [
           { name: { contains: query } },
-          { phone: { contains: query } },
           { clientId: { contains: query } },
           { email: { contains: query } },
           { cnic: { contains: query } },
+          // Add all phone format variants
+          ...phoneConditions,
         ],
         isActive: true,
       },

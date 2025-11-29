@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, use, useRef } from "react";
 import {
   Box,
   Paper,
@@ -18,15 +18,21 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PrintIcon from "@mui/icons-material/Print";
 import { useRouter } from "next/navigation";
+import { useReactToPrint } from "react-to-print";
 import StatusBadge from "@/components/common/StatusBadge";
 import { MainLayout } from "@/components/layout";
 import { Invoice, Client } from "@/types";
 import ReceivePaymentDialog from "@/components/dialogs/ReceivePaymentDialog";
+import PrintInvoice from "@/components/print/PrintInvoice";
 
 export default function InvoiceDetailPage({
   params,
@@ -39,6 +45,8 @@ export default function InvoiceDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
@@ -65,8 +73,13 @@ export default function InvoiceDetailPage({
     fetchInvoice();
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Invoice_${invoice?.invoiceNumber || "Print"}`,
+  });
+
+  const openPrintDialog = () => {
+    setShowPrintDialog(true);
   };
 
   if (loading) {
@@ -118,7 +131,7 @@ export default function InvoiceDetailPage({
         <Button
           variant="outlined"
           startIcon={<PrintIcon />}
-          onClick={handlePrint}
+          onClick={openPrintDialog}
         >
           Print
         </Button>
@@ -355,19 +368,74 @@ export default function InvoiceDetailPage({
         />
       )}
 
-      {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          .print-content {
-            box-shadow: none !important;
-            margin: 0 !important;
-            padding: 20px !important;
-          }
-        }
-      `}</style>
+      {/* Print Preview Dialog */}
+      <Dialog
+        open={showPrintDialog}
+        onClose={() => setShowPrintDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Print Invoice</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Preview your invoice before printing
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              border: "1px solid #ddd",
+              borderRadius: 1,
+              overflow: "auto",
+              maxHeight: 500,
+            }}
+          >
+            <PrintInvoice
+              ref={printRef}
+              invoiceNumber={invoice.invoiceNumber}
+              invoiceDate={new Date(invoice.invoiceDate).toLocaleDateString()}
+              clientName={(invoice.client as Client)?.name || ""}
+              clientPhone={(invoice.client as Client)?.phone || ""}
+              clientAddress={(invoice.client as Client)?.address}
+              items={(invoice.items || []).map((item, idx) => ({
+                sNo: idx + 1,
+                itemName: item.description,
+                width: item.width || 0,
+                height: item.height || 0,
+                quantity: item.quantity,
+                sqf: (item.width || 0) * (item.height || 0) * item.quantity,
+                rate: item.rate,
+                amount: item.total,
+              }))}
+              subtotal={invoice.subtotal}
+              previousBalance={invoice.previousBalance || 0}
+              totalAmount={invoice.totalAmount}
+              paidAmount={invoice.paidAmount}
+              discount={invoice.discount || 0}
+              balanceDue={invoice.balanceDue}
+              payments={(invoice.payments || []).map((p) => ({
+                receiptNumber: p.receiptNumber || `RCP-${p.id}`,
+                amount: p.amount,
+                paymentDate: new Date(p.paymentDate).toLocaleDateString(),
+                paymentMethod: p.paymentMethod,
+              }))}
+              showPaymentHistory={true}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPrintDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            startIcon={<PrintIcon />}
+            onClick={() => {
+              handlePrint();
+            }}
+          >
+            Print
+          </Button>
+        </DialogActions>
+      </Dialog>
     </MainLayout>
   );
 }

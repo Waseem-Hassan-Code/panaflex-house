@@ -139,6 +139,7 @@ model Invoice {
   // Relations
   items            InvoiceItem[]
   paymentsReceived PaymentReceived[]
+  labourCosts      LabourCost[]
   
   // Reference to previous invoice if balance carried forward
   previousInvoiceId String?
@@ -209,4 +210,17 @@ model Sequence {
   value     Int    @default(0)
   
   @@map("sequences")
+}
+
+// Labour cost attached to invoice (no effect on payments)
+model LabourCost {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  amount      Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("labour_costs")
 }

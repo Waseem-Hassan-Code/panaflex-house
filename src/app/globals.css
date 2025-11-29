@@ -217,3 +217,110 @@ body {
     width: 0%;
   }
 }
+
+/* ===================================== */
+/* PRINT STYLES */
+/* ===================================== */
+
+@media print {
+  /* Hide everything except print content */
+  body * {
+    visibility: hidden;
+  }
+
+  .print-container,
+  .print-container * {
+    visibility: visible;
+  }
+
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Hide non-printable elements */
+  .no-print,
+  .MuiDrawer-root,
+  .MuiAppBar-root,
+  button,
+  .MuiButton-root,
+  .MuiIconButton-root,
+  .MuiTextField-root input,
+  .MuiInputBase-root {
+    display: none !important;
+  }
+
+  /* Show input values as text in print */
+  .print-container .MuiTextField-root,
+  .print-container .MuiInputBase-root {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  /* Ensure colors print properly */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Table styling for print */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #ddd !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Background colors for print */
+  .print-bg-blue {
+    background-color: #e3f2fd !important;
+  }
+
+  .print-bg-red {
+    background-color: #ffebee !important;
+  }
+
+  .print-bg-green {
+    background-color: #e8f5e9 !important;
+  }
+
+  .print-bg-gray {
+    background-color: #f5f5f5 !important;
+  }
+}
+
+/* Print preview container */
+.print-preview {
+  background: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  margin: 20px auto;
+  max-width: 210mm;
+}
+
+@media screen {
+  .print-only {
+    display: none;
+  }
+}
+
+@media print {
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}

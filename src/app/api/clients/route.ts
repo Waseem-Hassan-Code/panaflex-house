@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getNextSequence } from "@/lib/sequences";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getPhoneSearchVariants } from "@/lib/phoneUtils";
 
 // GET - List clients with pagination and search
 export async function GET(request: NextRequest) {
@@ -16,17 +17,24 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * pageSize;
 
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search } },
-            { phone: { contains: search } },
-            { clientId: { contains: search } },
-            { email: { contains: search } },
-            { cnic: { contains: search } },
-          ],
-        }
-      : {};
+    // Build search conditions including smart phone search
+    let where: any = {};
+    if (search) {
+      const phoneVariants = getPhoneSearchVariants(search);
+      const phoneConditions = phoneVariants.map((variant) => ({
+        phone: { contains: variant },
+      }));
+      where = {
+        OR: [
+          { name: { contains: search } },
+          { clientId: { contains: search } },
+          { email: { contains: search } },
+          { cnic: { contains: search } },
+          // Add all phone format variants
+          ...phoneConditions,
+        ],
+      };
+    }
 
     const [clients, total] = await Promise.all([
       prisma.client.findMany({
