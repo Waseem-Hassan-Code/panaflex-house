@@ -26,6 +26,8 @@ import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout";
 import { StatCard, PaymentChart } from "@/components/dashboard";
 import StatusBadge from "@/components/common/StatusBadge";
+import TodayPaymentsDialog from "@/components/dialogs/TodayPaymentsDialog";
+import PendingAmountsDialog from "@/components/dialogs/PendingAmountsDialog";
 import { DashboardStats } from "@/types";
 
 export default function DashboardPage() {
@@ -33,6 +35,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [todayPaymentsOpen, setTodayPaymentsOpen] = useState(false);
+  const [pendingAmountsOpen, setPendingAmountsOpen] = useState(false);
+  const [todayPaymentsCount, setTodayPaymentsCount] = useState(0);
+  const [pendingClientsCount, setPendingClientsCount] = useState(0);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -49,7 +55,32 @@ export default function DashboardPage() {
       }
     };
 
+    const fetchCounts = async () => {
+      try {
+        // Fetch today's payments count
+        const todayRes = await fetch("/api/dashboard/today-payments");
+        if (todayRes.ok) {
+          const todayData = await todayRes.json();
+          setTodayPaymentsCount(todayData.summary?.totalPayments || 0);
+        }
+
+        // Fetch pending clients count
+        const pendingRes = await fetch(
+          "/api/dashboard/pending-amounts?page=0&pageSize=1"
+        );
+        if (pendingRes.ok) {
+          const pendingData = await pendingRes.json();
+          setPendingClientsCount(
+            pendingData.summary?.totalClientsWithPending || 0
+          );
+        }
+      } catch (error) {
+        console.error("Failed to fetch counts:", error);
+      }
+    };
+
     fetchStats();
+    fetchCounts();
   }, []);
 
   if (loading) {
@@ -123,6 +154,10 @@ export default function DashboardPage() {
               icon={<PaymentIcon sx={{ fontSize: 28 }} />}
               color="#4caf50"
               trend={{ value: 12, isPositive: true }}
+              count={todayPaymentsCount}
+              countLabel="payments"
+              clickable
+              onClick={() => setTodayPaymentsOpen(true)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -142,6 +177,10 @@ export default function DashboardPage() {
               value={`Rs ${(stats?.pendingAmount || 0).toLocaleString()}`}
               icon={<AccountBalanceIcon sx={{ fontSize: 28 }} />}
               color="#f44336"
+              count={pendingClientsCount}
+              countLabel="clients"
+              clickable
+              onClick={() => setPendingAmountsOpen(true)}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -381,6 +420,18 @@ export default function DashboardPage() {
           </Grid>
         </Grid>
       </Box>
+
+      {/* Today's Payments Dialog */}
+      <TodayPaymentsDialog
+        open={todayPaymentsOpen}
+        onClose={() => setTodayPaymentsOpen(false)}
+      />
+
+      {/* Pending Amounts Dialog */}
+      <PendingAmountsDialog
+        open={pendingAmountsOpen}
+        onClose={() => setPendingAmountsOpen(false)}
+      />
     </MainLayout>
   );
 }

@@ -127,7 +127,7 @@ export default function Sidebar() {
             WebkitTextFillColor: "transparent",
           }}
         >
-          Waseem Kobra
+          Kharaian Advertisment
         </Typography>
       </Box>
 
