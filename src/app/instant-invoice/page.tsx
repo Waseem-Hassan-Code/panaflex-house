@@ -24,6 +24,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import {
@@ -38,12 +42,14 @@ import {
   Receipt as ReceiptIcon,
   History as HistoryIcon,
   AccountBalance as AccountBalanceIcon,
+  FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout";
 import { useReactToPrint } from "react-to-print";
 import PrintInvoice from "@/components/print/PrintInvoice";
 import { formatPhoneWithDash } from "@/lib/phoneUtils";
+import * as XLSX from "xlsx";
 
 interface InvoiceItem {
   itemName: string;
@@ -127,6 +133,10 @@ export default function InstantInvoicePage() {
   const [items, setItems] = useState<InvoiceItem[]>([{ ...emptyItem }]);
   const [labourCosts, setLabourCosts] = useState<LabourCost[]>([]);
   const [notes, setNotes] = useState("");
+
+  // Payment at invoice creation
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
 
   // Invoice history navigation
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
@@ -295,6 +305,14 @@ export default function InstantInvoicePage() {
           items: validItems,
           labourCosts: labourCosts.filter((l) => l.description && l.amount > 0),
           notes,
+          // Include payment if amount > 0
+          payment:
+            paidAmount > 0
+              ? {
+                  amount: paidAmount,
+                  paymentMethod: paymentMethod,
+                }
+              : null,
         }),
       });
 
@@ -306,10 +324,12 @@ export default function InstantInvoicePage() {
       const data = await response.json();
       setCreatedInvoice(data);
 
+      const paymentMsg =
+        paidAmount > 0 ? ` | Paid: Rs. ${paidAmount.toLocaleString()}` : "";
       toast.success("Invoice Created Successfully!", {
         description: `Invoice: ${
           data.invoiceNumber
-        } | Total: Rs. ${totalAmount.toLocaleString()}`,
+        } | Total: Rs. ${totalAmount.toLocaleString()}${paymentMsg}`,
       });
 
       // Reset form
@@ -318,6 +338,8 @@ export default function InstantInvoicePage() {
       setNotes("");
       setName("");
       setPhone("");
+      setPaidAmount(0);
+      setPaymentMethod("CASH");
       setClientData(null);
       setIsNewClient(false);
     } catch (err) {
@@ -353,6 +375,103 @@ export default function InstantInvoicePage() {
     }
   };
 
+  // Export all clients to Excel
+  const handleExportClients = async () => {
+    try {
+      toast.info("Fetching client data...");
+
+      // Fetch all clients
+      const response = await fetch("/api/clients?pageSize=10000");
+      const data = await response.json();
+
+      if (!data.data || data.data.length === 0) {
+        toast.error("No clients to export");
+        return;
+      }
+
+      // Prepare data for Excel with only name and phone + balance columns
+      const excelData = data.data.map((client: any, index: number) => {
+        const totalInvoiced =
+          client.invoices?.reduce(
+            (sum: number, inv: any) =>
+              sum + (inv.balanceDue + (inv.paidAmount || 0)),
+            0
+          ) || 0;
+        const totalPaid = totalInvoiced - (client.totalBalance || 0);
+
+        return {
+          "S.No": index + 1,
+          "Client ID": client.clientId,
+          Name: client.name,
+          Phone: client.phone,
+          "Total Invoiced": totalInvoiced,
+          "Paid Amount": totalPaid,
+          "Remaining Balance": client.totalBalance || 0,
+        };
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      ws["!cols"] = [
+        { wch: 6 }, // S.No
+        { wch: 12 }, // Client ID
+        { wch: 25 }, // Name
+        { wch: 15 }, // Phone
+        { wch: 15 }, // Total Invoiced
+        { wch: 15 }, // Paid Amount
+        { wch: 18 }, // Remaining Balance
+      ];
+
+      // Add totals row at the end
+      const totalRow = excelData.length + 2; // +2 for header and 1-based index
+      const totals = excelData.reduce(
+        (acc: any, row: any) => {
+          acc.totalInvoiced += row["Total Invoiced"];
+          acc.paid += row["Paid Amount"];
+          acc.remaining += row["Remaining Balance"];
+          return acc;
+        },
+        { totalInvoiced: 0, paid: 0, remaining: 0 }
+      );
+
+      // Add accumulative totals row
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [
+          [
+            "",
+            "",
+            "",
+            "TOTALS:",
+            totals.totalInvoiced,
+            totals.paid,
+            totals.remaining,
+          ],
+        ],
+        { origin: `A${totalRow}` }
+      );
+
+      XLSX.utils.book_append_sheet(wb, ws, "Clients");
+
+      // Generate filename with date
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `Clients_Export_${date}.xlsx`;
+
+      // Download file
+      XLSX.writeFile(wb, filename);
+
+      toast.success("Clients exported successfully!", {
+        description: `${excelData.length} clients exported to ${filename}`,
+      });
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export clients");
+    }
+  };
+
   return (
     <MainLayout>
       <Box sx={{ maxWidth: 1200, mx: "auto" }}>
@@ -368,16 +487,26 @@ export default function InstantInvoicePage() {
           <Typography variant="h4" sx={{ fontWeight: 700, color: "#1a237e" }}>
             Instant Invoice
           </Typography>
-          {clientData && (
+          <Box sx={{ display: "flex", gap: 2 }}>
             <Button
               variant="outlined"
-              startIcon={<HistoryIcon />}
-              onClick={loadInvoiceHistory}
-              disabled={loadingHistory}
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportClients}
+              color="success"
             >
-              {loadingHistory ? "Loading..." : "View Previous Invoices"}
+              Export Clients to Excel
             </Button>
-          )}
+            {clientData && (
+              <Button
+                variant="outlined"
+                startIcon={<HistoryIcon />}
+                onClick={loadInvoiceHistory}
+                disabled={loadingHistory}
+              >
+                {loadingHistory ? "Loading..." : "View Previous Invoices"}
+              </Button>
+            )}
+          </Box>
         </Box>
 
         {error && (
@@ -866,6 +995,55 @@ export default function InstantInvoicePage() {
                     {totalAmount.toLocaleString()}
                   </Typography>
                 </Box>
+
+                {/* Payment Input Section */}
+                <Box
+                  sx={{
+                    mb: 2,
+                    mt: 2,
+                    p: 1.5,
+                    bgcolor: "#e8f5e9",
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mb: 1, fontWeight: 600, color: "#2e7d32" }}
+                  >
+                    Receive Payment Now
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <TextField
+                      size="small"
+                      label="Amount"
+                      type="number"
+                      value={paidAmount || ""}
+                      onChange={(e) =>
+                        setPaidAmount(parseFloat(e.target.value) || 0)
+                      }
+                      sx={{ flex: 1 }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">Rs.</InputAdornment>
+                        ),
+                      }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <InputLabel>Method</InputLabel>
+                      <Select
+                        value={paymentMethod}
+                        label="Method"
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                      >
+                        <MenuItem value="CASH">Cash</MenuItem>
+                        <MenuItem value="CHEQUE">Cheque</MenuItem>
+                        <MenuItem value="BANK_TRANSFER">Bank</MenuItem>
+                        <MenuItem value="ONLINE">Online</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+                </Box>
+
                 <Box
                   sx={{
                     display: "flex",
@@ -874,7 +1052,9 @@ export default function InstantInvoicePage() {
                   }}
                 >
                   <Typography>Paid</Typography>
-                  <Typography fontWeight={500}>0</Typography>
+                  <Typography fontWeight={500} color="success.main">
+                    {paidAmount.toLocaleString()}
+                  </Typography>
                 </Box>
                 <Box
                   sx={{
@@ -891,14 +1071,20 @@ export default function InstantInvoicePage() {
                   sx={{
                     display: "flex",
                     justifyContent: "space-between",
-                    bgcolor: "#ffebee",
+                    bgcolor:
+                      totalAmount - paidAmount > 0 ? "#ffebee" : "#e8f5e9",
                     p: 1,
                     mx: -1,
                   }}
                 >
                   <Typography fontWeight={700}>Balance</Typography>
-                  <Typography fontWeight={700} color="error">
-                    {totalAmount.toLocaleString()}
+                  <Typography
+                    fontWeight={700}
+                    color={
+                      totalAmount - paidAmount > 0 ? "error" : "success.main"
+                    }
+                  >
+                    {(totalAmount - paidAmount).toLocaleString()}
                   </Typography>
                 </Box>
               </Paper>
@@ -1021,11 +1207,21 @@ export default function InstantInvoicePage() {
                 subtotal={createdInvoice.subtotal || subtotal}
                 previousBalance={createdInvoice.previousBalance || 0}
                 totalAmount={createdInvoice.totalAmount || totalAmount}
-                paidAmount={0}
-                balanceDue={
-                  createdInvoice.balanceDue || createdInvoice.totalAmount
+                paidAmount={createdInvoice.paidAmount || 0}
+                balanceDue={createdInvoice.balanceDue}
+                showPaymentHistory={createdInvoice.payment ? true : false}
+                payments={
+                  createdInvoice.payment
+                    ? [
+                        {
+                          receiptNumber: createdInvoice.payment.receiptNumber,
+                          amount: createdInvoice.payment.amount,
+                          paymentDate: new Date().toLocaleDateString("en-GB"),
+                          paymentMethod: createdInvoice.payment.paymentMethod,
+                        },
+                      ]
+                    : []
                 }
-                showPaymentHistory={false}
                 notes={notes}
               />
             </Box>

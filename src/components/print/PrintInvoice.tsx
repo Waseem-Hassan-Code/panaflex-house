@@ -415,6 +415,53 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
                 </tr>
               )
             )}
+            {/* Accumulative Totals Row */}
+            <tr style={{ backgroundColor: "#e3f2fd", fontWeight: 600 }}>
+              <td
+                colSpan={5}
+                style={{
+                  border: "2px solid #1a237e",
+                  padding: "8px",
+                  textAlign: "right",
+                  fontWeight: 700,
+                  color: "#1a237e",
+                }}
+              >
+                TOTALS:
+              </td>
+              <td
+                style={{
+                  border: "2px solid #1a237e",
+                  padding: "8px",
+                  textAlign: "right",
+                  fontWeight: 700,
+                  color: "#4caf50",
+                }}
+              >
+                {totalQty.toFixed(2)}
+              </td>
+              <td
+                style={{
+                  border: "2px solid #1a237e",
+                  padding: "8px",
+                  textAlign: "right",
+                  fontWeight: 700,
+                }}
+              >
+                -
+              </td>
+              <td
+                style={{
+                  border: "2px solid #1a237e",
+                  padding: "8px",
+                  textAlign: "right",
+                  fontWeight: 700,
+                  color: "#1a237e",
+                }}
+              >
+                {subtotal.toLocaleString()}
+              </td>
+            </tr>
           </tbody>
         </table>
 

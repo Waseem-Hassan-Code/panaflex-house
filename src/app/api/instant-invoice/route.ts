@@ -18,6 +18,11 @@ interface LabourCostInput {
   amount: number;
 }
 
+interface PaymentInput {
+  amount: number;
+  paymentMethod: string;
+}
+
 // POST - Create instant invoice (with auto client creation if needed)
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +39,7 @@ export async function POST(request: NextRequest) {
       items,
       labourCosts,
       notes,
+      payment,
     } = body;
 
     if (!name || !phone) {
@@ -197,6 +203,66 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle payment if provided
+    let paymentReceived = null;
+    let finalBalanceDue = totalAmount;
+
+    if (payment && payment.amount > 0) {
+      const paymentAmount = Math.min(payment.amount, totalAmount); // Don't allow overpayment
+
+      // Generate receipt number
+      const receiptNumber = await getNextSequence("RECEIPT");
+
+      // Create payment record
+      paymentReceived = await prisma.paymentReceived.create({
+        data: {
+          receiptNumber,
+          invoiceId: invoice.id,
+          clientId: client.id,
+          amount: paymentAmount,
+          paymentMethod: payment.paymentMethod || "CASH",
+          paymentDate: new Date(),
+          notes: "Payment received at invoice creation",
+          createdById: session.user.id,
+        },
+      });
+
+      // Update invoice with paid amount and new balance
+      finalBalanceDue = totalAmount - paymentAmount;
+      const newStatus =
+        finalBalanceDue <= 0
+          ? "PAID"
+          : paymentAmount > 0
+          ? "PARTIAL"
+          : "UNPAID";
+
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          paidAmount: paymentAmount,
+          balanceDue: finalBalanceDue,
+          status: newStatus,
+        },
+      });
+
+      // Log payment
+      await prisma.transactionLog.create({
+        data: {
+          entityType: EntityType.PAYMENT,
+          entityId: paymentReceived.id,
+          action: ActionType.CREATE,
+          details: {
+            receiptNumber,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: paymentAmount,
+            paymentMethod: payment.paymentMethod,
+            source: "instant-invoice",
+          },
+          userId: session.user.id,
+        },
+      });
+    }
+
     // Log invoice creation
     await prisma.transactionLog.create({
       data: {
@@ -210,6 +276,8 @@ export async function POST(request: NextRequest) {
           subtotal,
           previousBalance,
           totalAmount,
+          paidAmount: paymentReceived?.amount || 0,
+          balanceDue: finalBalanceDue,
           itemCount: items.length,
           labourCostCount: labourCosts?.length || 0,
           source: "instant-invoice",
@@ -227,10 +295,18 @@ export async function POST(request: NextRequest) {
       subtotal,
       previousBalance,
       totalAmount,
-      balanceDue: invoice.balanceDue,
+      paidAmount: paymentReceived?.amount || 0,
+      balanceDue: finalBalanceDue,
       isNewClient,
       items: invoice.items,
       labourCosts: createdLabourCosts,
+      payment: paymentReceived
+        ? {
+            receiptNumber: paymentReceived.receiptNumber,
+            amount: paymentReceived.amount,
+            paymentMethod: paymentReceived.paymentMethod,
+          }
+        : null,
     });
   } catch (error) {
     console.error("Error creating instant invoice:", error);
