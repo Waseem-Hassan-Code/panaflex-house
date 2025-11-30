@@ -396,24 +396,28 @@ export default function InvoiceDetailPage({
               invoiceDate={new Date(invoice.invoiceDate).toLocaleDateString()}
               clientName={(invoice.client as Client)?.name || ""}
               clientPhone={(invoice.client as Client)?.phone || ""}
-              clientAddress={(invoice.client as Client)?.address}
+              clientAddress={(invoice.client as Client)?.address || undefined}
               items={(invoice.items || []).map((item, idx) => ({
                 sNo: idx + 1,
-                itemName: item.description,
+                itemName: item.itemName,
                 width: item.width || 0,
                 height: item.height || 0,
                 quantity: item.quantity,
-                sqf: (item.width || 0) * (item.height || 0) * item.quantity,
+                sqf:
+                  item.sqf ||
+                  (item.width || 0) * (item.height || 0) * item.quantity,
                 rate: item.rate,
-                amount: item.total,
+                amount: item.amount,
               }))}
+              itemsSubtotal={invoice.subtotal + (invoice.labourCost || 0)}
+              labourCost={invoice.labourCost || 0}
               subtotal={invoice.subtotal}
               previousBalance={invoice.previousBalance || 0}
               totalAmount={invoice.totalAmount}
               paidAmount={invoice.paidAmount}
               discount={invoice.discount || 0}
               balanceDue={invoice.balanceDue}
-              payments={(invoice.payments || []).map((p) => ({
+              payments={(invoice.paymentsReceived || []).map((p) => ({
                 receiptNumber: p.receiptNumber || `RCP-${p.id}`,
                 amount: p.amount,
                 paymentDate: new Date(p.paymentDate).toLocaleDateString(),

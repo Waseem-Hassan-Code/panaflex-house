@@ -71,9 +71,12 @@ export interface Invoice {
   client?: Client;
   invoiceDate: Date;
   dueDate?: Date | null;
+  itemsSubtotal?: number;
+  labourCost?: number;
   subtotal: number;
   previousBalance: number;
   totalAmount: number;
+  discount?: number;
   paidAmount: number;
   balanceDue: number;
   status: InvoiceStatus;
@@ -86,8 +89,18 @@ export interface Invoice {
   updatedBy?: User | null;
   items?: InvoiceItem[];
   paymentsReceived?: PaymentReceived[];
+  labourCosts?: LabourCost[];
   previousInvoiceId?: string | null;
   previousInvoice?: Invoice | null;
+}
+
+export interface LabourCost {
+  id: string;
+  invoiceId: string;
+  description: string;
+  amount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface PaymentReceived {

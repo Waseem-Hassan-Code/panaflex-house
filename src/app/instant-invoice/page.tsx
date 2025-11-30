@@ -121,7 +121,7 @@ const emptyItem: InvoiceItem = {
 };
 
 const emptyLabour: LabourCost = {
-  description: "",
+  description: "Labour Cost",
   amount: 0,
 };
 
