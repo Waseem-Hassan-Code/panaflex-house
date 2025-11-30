@@ -28,6 +28,8 @@ interface PrintInvoiceProps {
   clientPhone: string;
   clientAddress?: string;
   items: InvoiceItem[];
+  itemsSubtotal?: number;
+  labourCost?: number;
   subtotal: number;
   previousBalance: number;
   totalAmount: number;
@@ -48,6 +50,8 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
       clientPhone,
       clientAddress,
       items,
+      itemsSubtotal,
+      labourCost = 0,
       subtotal,
       previousBalance,
       totalAmount,
@@ -61,6 +65,8 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
     ref
   ) => {
     const totalQty = items.reduce((sum, item) => sum + item.sqf, 0);
+    // If itemsSubtotal not provided, calculate from subtotal + labourCost
+    const calculatedItemsSubtotal = itemsSubtotal ?? subtotal + labourCost;
 
     return (
       <Box
@@ -620,6 +626,51 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
                     {totalQty.toFixed(2)}
                   </td>
                 </tr>
+                {labourCost > 0 && (
+                  <>
+                    <tr>
+                      <td
+                        style={{
+                          border: "1px solid #ddd",
+                          padding: "6px 10px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Items Total
+                      </td>
+                      <td
+                        style={{
+                          border: "1px solid #ddd",
+                          padding: "6px 10px",
+                          textAlign: "right",
+                        }}
+                      >
+                        {calculatedItemsSubtotal.toLocaleString()}
+                      </td>
+                    </tr>
+                    <tr style={{ backgroundColor: "#fff3e0" }}>
+                      <td
+                        style={{
+                          border: "1px solid #ddd",
+                          padding: "6px 10px",
+                          color: "#e65100",
+                        }}
+                      >
+                        Labour Cost
+                      </td>
+                      <td
+                        style={{
+                          border: "1px solid #ddd",
+                          padding: "6px 10px",
+                          textAlign: "right",
+                          color: "#e65100",
+                        }}
+                      >
+                        -{labourCost.toLocaleString()}
+                      </td>
+                    </tr>
+                  </>
+                )}
                 <tr style={{ backgroundColor: "#e3f2fd" }}>
                   <td
                     style={{
@@ -628,7 +679,7 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
                       fontWeight: 600,
                     }}
                   >
-                    Total Amount
+                    {labourCost > 0 ? "Net Amount" : "Total Amount"}
                   </td>
                   <td
                     style={{

@@ -84,6 +84,10 @@ interface ClientData {
 interface InvoiceHistory {
   id: string;
   invoiceNumber: string;
+  subtotal: number;
+  labourCost: number;
+  itemsSubtotal: number;
+  previousBalance: number;
   totalAmount: number;
   paidAmount: number;
   balanceDue: number;
@@ -222,12 +226,14 @@ export default function InstantInvoicePage() {
   const calculateItemAmount = (item: InvoiceItem) =>
     calculateItemSqf(item) * item.rate;
 
-  const subtotal = items.reduce(
+  const itemsSubtotal = items.reduce(
     (sum, item) => sum + calculateItemAmount(item),
     0
   );
   const previousBalance = clientData?.pendingBalance || 0;
-  const totalLabour = labourCosts.reduce((sum, l) => sum + l.amount, 0);
+  const totalLabour = labourCosts.reduce((sum, l) => sum + (l.amount || 0), 0);
+  // Subtract labour cost from items subtotal
+  const subtotal = itemsSubtotal - totalLabour;
   const totalAmount = subtotal + previousBalance;
   const totalQty = items.reduce((sum, item) => sum + calculateItemSqf(item), 0);
 
@@ -959,12 +965,43 @@ export default function InstantInvoicePage() {
                     display: "flex",
                     justifyContent: "space-between",
                     mb: 1,
+                  }}
+                >
+                  <Typography>Items Total</Typography>
+                  <Typography fontWeight={500}>
+                    {itemsSubtotal.toLocaleString()}
+                  </Typography>
+                </Box>
+                {totalLabour > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                      bgcolor: "#fff3e0",
+                      p: 1,
+                      mx: -1,
+                    }}
+                  >
+                    <Typography color="warning.dark">
+                      Labour Cost (Deducted)
+                    </Typography>
+                    <Typography color="warning.dark" fontWeight={500}>
+                      -{totalLabour.toLocaleString()}
+                    </Typography>
+                  </Box>
+                )}
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    mb: 1,
                     bgcolor: "#e3f2fd",
                     p: 1,
                     mx: -1,
                   }}
                 >
-                  <Typography fontWeight={600}>Total Amount</Typography>
+                  <Typography fontWeight={600}>Net Amount</Typography>
                   <Typography fontWeight={700}>
                     {subtotal.toLocaleString()}
                   </Typography>
@@ -990,7 +1027,7 @@ export default function InstantInvoicePage() {
                     mb: 1,
                   }}
                 >
-                  <Typography>Sub Total</Typography>
+                  <Typography>Grand Total</Typography>
                   <Typography fontWeight={500}>
                     {totalAmount.toLocaleString()}
                   </Typography>
@@ -1204,6 +1241,8 @@ export default function InstantInvoicePage() {
                     amount: item.amount || item.sqf * item.rate,
                   })) || []
                 }
+                itemsSubtotal={createdInvoice.itemsSubtotal || itemsSubtotal}
+                labourCost={createdInvoice.labourCost || totalLabour}
                 subtotal={createdInvoice.subtotal || subtotal}
                 previousBalance={createdInvoice.previousBalance || 0}
                 totalAmount={createdInvoice.totalAmount || totalAmount}
@@ -1309,11 +1348,10 @@ export default function InstantInvoicePage() {
                   clientName={clientData?.name || name}
                   clientPhone={clientData?.phone || phone}
                   items={currentHistoryInvoice.items}
-                  subtotal={currentHistoryInvoice.items.reduce(
-                    (sum, item) => sum + item.amount,
-                    0
-                  )}
-                  previousBalance={0}
+                  itemsSubtotal={currentHistoryInvoice.itemsSubtotal}
+                  labourCost={currentHistoryInvoice.labourCost || 0}
+                  subtotal={currentHistoryInvoice.subtotal}
+                  previousBalance={currentHistoryInvoice.previousBalance || 0}
                   totalAmount={currentHistoryInvoice.totalAmount}
                   paidAmount={currentHistoryInvoice.paidAmount}
                   balanceDue={currentHistoryInvoice.balanceDue}
@@ -1437,7 +1475,7 @@ export default function InstantInvoicePage() {
 
               {/* Totals */}
               <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
-                <Paper sx={{ p: 2, minWidth: 250, bgcolor: "#fafafa" }}>
+                <Paper sx={{ p: 2, minWidth: 280, bgcolor: "#fafafa" }}>
                   <Box
                     sx={{
                       display: "flex",
@@ -1445,7 +1483,76 @@ export default function InstantInvoicePage() {
                       mb: 1,
                     }}
                   >
-                    <Typography>Total Amount:</Typography>
+                    <Typography>Items Total:</Typography>
+                    <Typography fontWeight={500}>
+                      Rs.{" "}
+                      {currentHistoryInvoice.itemsSubtotal?.toLocaleString() ||
+                        currentHistoryInvoice.items
+                          .reduce((sum, item) => sum + item.amount, 0)
+                          .toLocaleString()}
+                    </Typography>
+                  </Box>
+                  {currentHistoryInvoice.labourCost > 0 && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                        bgcolor: "#fff3e0",
+                        p: 1,
+                        mx: -1,
+                      }}
+                    >
+                      <Typography color="warning.dark">
+                        Labour Cost (Deducted):
+                      </Typography>
+                      <Typography color="warning.dark" fontWeight={500}>
+                        -Rs. {currentHistoryInvoice.labourCost.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                      bgcolor: "#e3f2fd",
+                      p: 1,
+                      mx: -1,
+                    }}
+                  >
+                    <Typography fontWeight={600}>
+                      {currentHistoryInvoice.labourCost > 0
+                        ? "Net Amount:"
+                        : "Subtotal:"}
+                    </Typography>
+                    <Typography fontWeight={600}>
+                      Rs. {currentHistoryInvoice.subtotal.toLocaleString()}
+                    </Typography>
+                  </Box>
+                  {currentHistoryInvoice.previousBalance > 0 && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography color="error">Prv. Balance:</Typography>
+                      <Typography color="error" fontWeight={500}>
+                        Rs.{" "}
+                        {currentHistoryInvoice.previousBalance.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography>Grand Total:</Typography>
                     <Typography fontWeight={600}>
                       Rs. {currentHistoryInvoice.totalAmount.toLocaleString()}
                     </Typography>
