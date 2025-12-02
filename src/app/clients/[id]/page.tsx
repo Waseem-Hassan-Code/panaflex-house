@@ -29,6 +29,7 @@ import AddIcon from "@mui/icons-material/Add";
 import PaymentIcon from "@mui/icons-material/Payment";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -36,6 +37,7 @@ import { MainLayout } from "@/components/layout";
 import { Client, Invoice, PaymentReceived } from "@/types";
 import ReceivePaymentDialog from "@/components/dialogs/ReceivePaymentDialog";
 import CreateInvoiceDialog from "@/components/dialogs/CreateInvoiceDialog";
+import EditPaymentDialog from "@/components/dialogs/EditPaymentDialog";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -65,7 +67,10 @@ export default function ClientDetailPage({
   const [tabValue, setTabValue] = useState(0);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [selectedPayment, setSelectedPayment] =
+    useState<PaymentReceived | null>(null);
 
   const fetchClient = useCallback(async () => {
     setLoading(true);
@@ -95,6 +100,17 @@ export default function ClientDetailPage({
   const handlePaymentSuccess = () => {
     setShowPaymentDialog(false);
     setSelectedInvoice(null);
+    fetchClient();
+  };
+
+  const handleEditPayment = (payment: PaymentReceived) => {
+    setSelectedPayment(payment);
+    setShowEditPaymentDialog(true);
+  };
+
+  const handleEditPaymentSuccess = () => {
+    setShowEditPaymentDialog(false);
+    setSelectedPayment(null);
     fetchClient();
   };
 
@@ -518,13 +534,16 @@ export default function ClientDetailPage({
                     Amount
                   </TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Received By</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }} align="center">
+                    Actions
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {!client.paymentsReceived ||
                 client.paymentsReceived.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                       No payments yet
                     </TableCell>
                   </TableRow>
@@ -554,6 +573,17 @@ export default function ClientDetailPage({
                         Rs. {payment.amount.toLocaleString()}
                       </TableCell>
                       <TableCell>{payment.createdBy?.name || "-"}</TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Edit Payment">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleEditPayment(payment)}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -583,6 +613,18 @@ export default function ClientDetailPage({
           onClose={() => setShowInvoiceDialog(false)}
           client={client}
           onSuccess={handleInvoiceSuccess}
+        />
+      )}
+
+      {showEditPaymentDialog && selectedPayment && (
+        <EditPaymentDialog
+          open={showEditPaymentDialog}
+          onClose={() => {
+            setShowEditPaymentDialog(false);
+            setSelectedPayment(null);
+          }}
+          payment={selectedPayment}
+          onSuccess={handleEditPaymentSuccess}
         />
       )}
     </MainLayout>
