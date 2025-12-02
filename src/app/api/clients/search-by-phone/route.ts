@@ -66,6 +66,17 @@ export async function GET(request: NextRequest) {
         email: client.email,
         address: client.address,
         pendingBalance,
+        creditBalance:
+          (client as { creditBalance?: number }).creditBalance || 0,
+        hasMembership:
+          (client as { hasMembership?: boolean }).hasMembership || false,
+        membershipDiscount:
+          (client as { membershipDiscount?: number }).membershipDiscount || 0,
+        membershipType:
+          (client as { membershipType?: string | null }).membershipType || null,
+        membershipEndDate:
+          (client as { membershipEndDate?: Date | null }).membershipEndDate ||
+          null,
         lastInvoice: lastInvoice
           ? {
               id: lastInvoice.id,

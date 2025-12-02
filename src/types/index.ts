@@ -29,6 +29,8 @@ export interface User {
   updatedBy?: User | null;
 }
 
+export type MembershipType = "FIXED" | "PERCENTAGE";
+
 export interface Client {
   id: string;
   clientId: string; // AUTO_001, CLIENT_002, etc.
@@ -37,6 +39,18 @@ export interface Client {
   phone: string;
   address?: string | null;
   cnic?: string | null;
+  creditBalance?: number; // Overpayment balance to be adjusted in next invoice
+
+  // Membership fields
+  hasMembership?: boolean;
+  membershipType?: MembershipType | string | null;
+  membershipDiscount?: number | null;
+  membershipStartDate?: Date | string | null;
+  membershipEndDate?: Date | string | null;
+  membershipExpiry?: Date | string | null; // Alias for membershipEndDate
+  membershipSince?: Date | string | null; // Alias for membershipStartDate
+  membershipCardId?: string | null;
+
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

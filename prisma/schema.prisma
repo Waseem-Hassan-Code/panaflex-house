@@ -91,6 +91,16 @@ model Client {
   phone        String
   address      String?
   cnic         String?
+  creditBalance Float   @default(0) // Overpayment balance to be adjusted in next invoice
+  
+  // Membership fields
+  hasMembership       Boolean  @default(false)
+  membershipType      String?  // "FIXED" or "PERCENTAGE"
+  membershipDiscount  Float?   // Amount or percentage value
+  membershipStartDate DateTime?
+  membershipEndDate   DateTime?
+  membershipCardId    String?  @unique // Unique ID for QR code
+  
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -118,6 +128,7 @@ model Invoice {
   
   // Amount calculations
   subtotal        Float    @default(0)
+  discount        Float    @default(0) // Membership discount applied
   previousBalance Float    @default(0) // Carried forward from previous invoices
   totalAmount     Float    @default(0) // subtotal + previousBalance
   paidAmount      Float    @default(0)

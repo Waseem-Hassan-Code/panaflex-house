@@ -67,7 +67,20 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, email, phone, address, cnic, isActive } = body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      cnic,
+      isActive,
+      // Membership fields
+      hasMembership,
+      membershipDiscount,
+      membershipType,
+      membershipStartDate,
+      membershipEndDate,
+    } = body;
 
     const existingClient = await prisma.client.findUnique({
       where: { id },
@@ -77,17 +90,37 @@ export async function PUT(
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
+    // Build update data object
+    const updateData: Record<string, unknown> = {
+      updatedById: session.user.id,
+    };
+
+    // Only include fields that are provided
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (cnic !== undefined) updateData.cnic = cnic;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    // Membership fields
+    if (hasMembership !== undefined) updateData.hasMembership = hasMembership;
+    if (membershipDiscount !== undefined)
+      updateData.membershipDiscount = membershipDiscount;
+    if (membershipType !== undefined)
+      updateData.membershipType = membershipType;
+    if (membershipStartDate !== undefined)
+      updateData.membershipStartDate = membershipStartDate
+        ? new Date(membershipStartDate)
+        : null;
+    if (membershipEndDate !== undefined)
+      updateData.membershipEndDate = membershipEndDate
+        ? new Date(membershipEndDate)
+        : null;
+
     const client = await prisma.client.update({
       where: { id },
-      data: {
-        name,
-        email,
-        phone,
-        address,
-        cnic,
-        isActive,
-        updatedById: session.user.id,
-      },
+      data: updateData,
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
         updatedBy: { select: { id: true, name: true, email: true } },
@@ -102,15 +135,31 @@ export async function PUT(
         action: "UPDATE",
         userId: session.user.id,
         details: {
+          membershipChanged:
+            hasMembership !== undefined &&
+            hasMembership !== existingClient.hasMembership,
+          membershipAction:
+            hasMembership !== undefined &&
+            hasMembership !== existingClient.hasMembership
+              ? hasMembership
+                ? "ADDED"
+                : "REMOVED"
+              : null,
           before: {
             name: existingClient.name,
             phone: existingClient.phone,
             email: existingClient.email,
+            hasMembership: existingClient.hasMembership,
+            membershipDiscount: existingClient.membershipDiscount,
+            membershipType: existingClient.membershipType,
           },
           after: {
             name: client.name,
             phone: client.phone,
             email: client.email,
+            hasMembership: client.hasMembership,
+            membershipDiscount: client.membershipDiscount,
+            membershipType: client.membershipType,
           },
         },
       },

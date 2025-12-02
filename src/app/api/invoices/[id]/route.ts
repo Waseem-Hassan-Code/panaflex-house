@@ -199,3 +199,85 @@ export async function PUT(
     );
   }
 }
+
+// DELETE - Delete invoice (only if no payments received)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        paymentsReceived: true,
+        items: true,
+        labourCosts: true,
+      },
+    });
+
+    if (!invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // Don't allow deletion if payments have been made
+    if (invoice.paymentsReceived.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot delete invoice with payments. Cancel the invoice instead.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Delete in transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete labour costs
+      await tx.labourCost.deleteMany({
+        where: { invoiceId: id },
+      });
+
+      // Delete items
+      await tx.invoiceItem.deleteMany({
+        where: { invoiceId: id },
+      });
+
+      // Delete invoice
+      await tx.invoice.delete({
+        where: { id },
+      });
+
+      // Create transaction log
+      await tx.transactionLog.create({
+        data: {
+          entityType: "INVOICE",
+          entityId: id,
+          action: "DELETE",
+          userId: session.user.id,
+          details: {
+            invoiceNumber: invoice.invoiceNumber,
+            clientName: invoice.client.name,
+            totalAmount: invoice.totalAmount,
+            reason: "Invoice deleted",
+          },
+        },
+      });
+    });
+
+    return NextResponse.json({ message: "Invoice deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting invoice:", error);
+    return NextResponse.json(
+      { error: "Failed to delete invoice" },
+      { status: 500 }
+    );
+  }
+}

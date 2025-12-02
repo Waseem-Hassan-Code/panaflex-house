@@ -140,12 +140,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (amount > invoice.balanceDue) {
-      return NextResponse.json(
-        { error: `Amount exceeds balance due (${invoice.balanceDue})` },
-        { status: 400 }
-      );
-    }
+    // Calculate overpayment (extra amount beyond invoice balance)
+    const overpayment = Math.max(0, amount - invoice.balanceDue);
+    const actualPaymentForInvoice = amount - overpayment;
 
     // Generate receipt number
     const receiptNumber = await getNextSequence("RECEIPT");
@@ -161,18 +158,30 @@ export async function POST(request: NextRequest) {
           amount,
           paymentMethod: paymentMethod || "CASH",
           reference,
-          notes,
+          notes:
+            overpayment > 0
+              ? `${
+                  notes || ""
+                } [Overpayment of Rs. ${overpayment} added to credit balance]`.trim()
+              : notes,
           createdById: session.user.id,
         },
         include: {
-          client: { select: { id: true, clientId: true, name: true } },
+          client: {
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              creditBalance: true,
+            },
+          },
           invoice: { select: { id: true, invoiceNumber: true } },
           createdBy: { select: { id: true, name: true } },
         },
       });
 
       // Update invoice
-      const newPaidAmount = invoice.paidAmount + amount;
+      const newPaidAmount = invoice.paidAmount + actualPaymentForInvoice;
       const newBalanceDue = invoice.totalAmount - newPaidAmount;
       const newStatus = newBalanceDue <= 0 ? "PAID" : "PARTIAL";
 
@@ -186,6 +195,22 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // If there's overpayment, add to client's credit balance
+      if (overpayment > 0) {
+        const client = await tx.client.findUnique({
+          where: { id: clientId },
+          select: { creditBalance: true },
+        });
+
+        await tx.client.update({
+          where: { id: clientId },
+          data: {
+            creditBalance: (client?.creditBalance || 0) + overpayment,
+            updatedById: session.user.id,
+          },
+        });
+      }
+
       // Create transaction log
       await tx.transactionLog.create({
         data: {
@@ -198,6 +223,8 @@ export async function POST(request: NextRequest) {
             invoiceNumber: invoice.invoiceNumber,
             clientName: invoice.client.name,
             amount: payment.amount,
+            appliedToInvoice: actualPaymentForInvoice,
+            overpayment: overpayment,
             paymentMethod: payment.paymentMethod,
             newInvoiceStatus: newStatus,
             remainingBalance: Math.max(0, newBalanceDue),
@@ -205,7 +232,11 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return payment;
+      return {
+        ...payment,
+        overpayment,
+        appliedToInvoice: actualPaymentForInvoice,
+      };
     });
 
     return NextResponse.json(result, { status: 201 });

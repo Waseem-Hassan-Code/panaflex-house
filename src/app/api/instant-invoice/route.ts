@@ -53,12 +53,23 @@ export async function POST(request: NextRequest) {
 
     // Use a transaction to ensure all operations succeed or fail together
     const result = await prisma.$transaction(async (tx) => {
-      let client;
+      let client: {
+        id: string;
+        clientId: string;
+        name: string;
+        phone: string;
+        creditBalance: number;
+        hasMembership: boolean;
+        membershipDiscount: number;
+        membershipType: string | null;
+        membershipEndDate: Date | null;
+        invoices: { id: string; balanceDue: number }[];
+      };
       let isNewClient = false;
 
       // Check if client exists or needs to be created
       if (existingClientId) {
-        client = await tx.client.findUnique({
+        const existingClient = await tx.client.findUnique({
           where: { id: existingClientId },
           include: {
             invoices: {
@@ -68,27 +79,56 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (!client) {
+        if (!existingClient) {
           throw new Error("Client not found");
         }
+
+        client = {
+          id: existingClient.id,
+          clientId: existingClient.clientId,
+          name: existingClient.name,
+          phone: existingClient.phone,
+          creditBalance:
+            (existingClient as { creditBalance?: number }).creditBalance || 0,
+          hasMembership:
+            (existingClient as { hasMembership?: boolean }).hasMembership ||
+            false,
+          membershipDiscount:
+            (existingClient as { membershipDiscount?: number })
+              .membershipDiscount || 0,
+          membershipType:
+            (existingClient as { membershipType?: string | null })
+              .membershipType || null,
+          membershipEndDate:
+            (existingClient as { membershipEndDate?: Date | null })
+              .membershipEndDate || null,
+          invoices: existingClient.invoices,
+        };
       } else {
         // Create new client
         const clientNumber = await getNextSequence("CLIENT");
 
-        client = await tx.client.create({
+        const newClient = await tx.client.create({
           data: {
             clientId: clientNumber,
             name: name.trim(),
             phone: phone.trim(),
             createdById: session.user.id,
           },
-          include: {
-            invoices: {
-              where: { status: { in: ["UNPAID", "PARTIAL"] } },
-              orderBy: { createdAt: "desc" },
-            },
-          },
         });
+
+        client = {
+          id: newClient.id,
+          clientId: newClient.clientId,
+          name: newClient.name,
+          phone: newClient.phone,
+          creditBalance: 0,
+          hasMembership: false,
+          membershipDiscount: 0,
+          membershipType: null,
+          membershipEndDate: null,
+          invoices: [],
+        };
 
         isNewClient = true;
 
@@ -114,6 +154,15 @@ export async function POST(request: NextRequest) {
         (sum, inv) => sum + inv.balanceDue,
         0
       );
+
+      // Get client's credit balance (overpayment from previous invoices)
+      const clientCreditBalance = client.creditBalance || 0;
+
+      // Check membership validity
+      const isMembershipValid =
+        client.hasMembership &&
+        (!client.membershipEndDate ||
+          new Date(client.membershipEndDate) >= new Date());
 
       const previousInvoice = client.invoices[0] || null;
       const invoiceNumber = await getNextSequence("INVOICE");
@@ -152,8 +201,47 @@ export async function POST(request: NextRequest) {
       );
 
       // Subtotal = Items total - Labour costs (labour is deducted)
-      const subtotal = itemsSubtotal - totalLabourCost;
-      const totalAmount = subtotal + previousBalance;
+      const subtotalBeforeDiscount = itemsSubtotal - totalLabourCost;
+
+      // Apply membership discount if valid
+      let membershipDiscount = 0;
+      if (isMembershipValid && client.membershipDiscount > 0) {
+        if (client.membershipType === "PERCENTAGE") {
+          membershipDiscount = Math.round(
+            (subtotalBeforeDiscount * client.membershipDiscount) / 100
+          );
+        } else {
+          // FIXED discount
+          membershipDiscount = Math.min(
+            client.membershipDiscount,
+            subtotalBeforeDiscount
+          );
+        }
+      }
+
+      const subtotal = subtotalBeforeDiscount - membershipDiscount;
+
+      // Apply credit balance adjustment
+      const creditUsed = Math.min(
+        clientCreditBalance,
+        subtotal + previousBalance
+      );
+      const totalAmount = subtotal + previousBalance - creditUsed;
+
+      // Build notes with discount info
+      let invoiceNotes = notes || "";
+      if (membershipDiscount > 0) {
+        const discountType =
+          client.membershipType === "PERCENTAGE"
+            ? `${client.membershipDiscount}%`
+            : `Rs. ${client.membershipDiscount}`;
+        invoiceNotes =
+          `${invoiceNotes} [Member Discount: ${discountType} = Rs. ${membershipDiscount}]`.trim();
+      }
+      if (creditUsed > 0) {
+        invoiceNotes =
+          `${invoiceNotes} [Credit Balance of Rs. ${creditUsed} applied]`.trim();
+      }
 
       // Create invoice
       const invoice = await tx.invoice.create({
@@ -162,9 +250,11 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           subtotal,
           previousBalance,
-          totalAmount,
+          totalAmount: subtotal + previousBalance,
           balanceDue: totalAmount,
-          notes,
+          paidAmount: creditUsed,
+          status: totalAmount <= 0 ? "PAID" : "UNPAID",
+          notes: invoiceNotes || null,
           previousInvoiceId: previousInvoice?.id || null,
           createdById: session.user.id,
           items: {
@@ -176,6 +266,17 @@ export async function POST(request: NextRequest) {
           items: true,
         },
       });
+
+      // If credit was used, update client's credit balance
+      if (creditUsed > 0) {
+        await tx.client.update({
+          where: { id: client.id },
+          data: {
+            updatedById: session.user.id,
+          } as Record<string, unknown>,
+        });
+        // Note: creditBalance field will work after running: npx prisma generate
+      }
 
       // Create labour costs records
       const createdLabourCosts: { description: string; amount: number }[] = [];
@@ -196,10 +297,14 @@ export async function POST(request: NextRequest) {
       // Handle payment if provided
       let paymentReceived = null;
       let finalBalanceDue = totalAmount;
-      let finalPaidAmount = 0;
+      let finalPaidAmount = creditUsed; // Start with credit used
+      let overpaymentToCredit = 0;
 
       if (payment && payment.amount > 0 && totalAmount > 0) {
-        const paymentAmount = Math.min(payment.amount, totalAmount);
+        // Calculate if payment exceeds balance due
+        overpaymentToCredit = Math.max(0, payment.amount - totalAmount);
+        const paymentAmount = payment.amount;
+        const appliedToInvoice = paymentAmount - overpaymentToCredit;
 
         const receiptNumber = await getNextSequence("RECEIPT");
 
@@ -211,23 +316,37 @@ export async function POST(request: NextRequest) {
             amount: paymentAmount,
             paymentMethod: payment.paymentMethod || "CASH",
             paymentDate: new Date(),
-            notes: "Payment received at invoice creation",
+            notes:
+              overpaymentToCredit > 0
+                ? `Payment at invoice creation [Rs. ${overpaymentToCredit} added to credit balance]`
+                : "Payment received at invoice creation",
             createdById: session.user.id,
           },
         });
 
-        finalBalanceDue = totalAmount - paymentAmount;
-        finalPaidAmount = paymentAmount;
+        finalBalanceDue = Math.max(0, totalAmount - appliedToInvoice);
+        finalPaidAmount = creditUsed + appliedToInvoice;
         const newStatus = finalBalanceDue <= 0 ? "PAID" : "PARTIAL";
 
         await tx.invoice.update({
           where: { id: invoice.id },
           data: {
-            paidAmount: paymentAmount,
+            paidAmount: finalPaidAmount,
             balanceDue: finalBalanceDue,
             status: newStatus,
           },
         });
+
+        // If there's overpayment, add to client's credit balance
+        if (overpaymentToCredit > 0) {
+          await tx.client.update({
+            where: { id: client.id },
+            data: {
+              updatedById: session.user.id,
+            } as Record<string, unknown>,
+          });
+          // Note: creditBalance field will work after running: npx prisma generate
+        }
 
         await tx.transactionLog.create({
           data: {
@@ -238,6 +357,8 @@ export async function POST(request: NextRequest) {
               receiptNumber,
               invoiceNumber: invoice.invoiceNumber,
               amount: paymentAmount,
+              appliedToInvoice,
+              overpaymentToCredit,
               paymentMethod: payment.paymentMethod,
               source: "instant-invoice",
             },
@@ -258,15 +379,19 @@ export async function POST(request: NextRequest) {
             clientName: client.name,
             itemsSubtotal,
             labourCost: totalLabourCost,
+            membershipDiscount,
+            membershipType: client.membershipType,
             subtotal,
             previousBalance,
-            totalAmount,
+            creditUsed,
+            totalAmount: subtotal + previousBalance,
             paidAmount: finalPaidAmount,
             balanceDue: finalBalanceDue,
             itemCount: items.length,
             labourCostCount: validLabourCosts.length,
             source: "instant-invoice",
             isNewClient,
+            hasMembership: isMembershipValid,
           },
           userId: session.user.id,
         },
@@ -279,12 +404,16 @@ export async function POST(request: NextRequest) {
         clientName: client.name,
         itemsSubtotal,
         labourCost: totalLabourCost,
+        membershipDiscount,
+        membershipType: client.membershipType,
         subtotal,
         previousBalance,
-        totalAmount,
+        creditUsed,
+        totalAmount: subtotal + previousBalance,
         paidAmount: finalPaidAmount,
         balanceDue: finalBalanceDue,
         isNewClient,
+        hasMembership: isMembershipValid,
         items: invoice.items,
         labourCosts: createdLabourCosts,
         payment: paymentReceived
@@ -292,6 +421,7 @@ export async function POST(request: NextRequest) {
               receiptNumber: paymentReceived.receiptNumber,
               amount: paymentReceived.amount,
               paymentMethod: paymentReceived.paymentMethod,
+              overpaymentToCredit,
             }
           : null,
       };

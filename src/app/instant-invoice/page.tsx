@@ -72,6 +72,11 @@ interface ClientData {
   email: string | null;
   address: string | null;
   pendingBalance: number;
+  creditBalance: number;
+  hasMembership: boolean;
+  membershipDiscount: number;
+  membershipType: string | null;
+  membershipEndDate: string | null;
   lastInvoice: {
     id: string;
     invoiceNumber: string;
@@ -231,10 +236,40 @@ export default function InstantInvoicePage() {
     0
   );
   const previousBalance = clientData?.pendingBalance || 0;
+  const creditBalance = clientData?.creditBalance || 0;
   const totalLabour = labourCosts.reduce((sum, l) => sum + (l.amount || 0), 0);
   // Subtract labour cost from items subtotal
-  const subtotal = itemsSubtotal - totalLabour;
-  const totalAmount = subtotal + previousBalance;
+  const subtotalBeforeDiscount = itemsSubtotal - totalLabour;
+
+  // Check if client has valid membership
+  const isMembershipValid =
+    clientData?.hasMembership &&
+    (!clientData.membershipEndDate ||
+      new Date(clientData.membershipEndDate) >= new Date());
+
+  // Calculate membership discount
+  let membershipDiscount = 0;
+  if (
+    isMembershipValid &&
+    clientData?.membershipDiscount &&
+    clientData.membershipDiscount > 0
+  ) {
+    if (clientData.membershipType === "PERCENTAGE") {
+      membershipDiscount = Math.round(
+        (subtotalBeforeDiscount * clientData.membershipDiscount) / 100
+      );
+    } else {
+      membershipDiscount = Math.min(
+        clientData.membershipDiscount,
+        subtotalBeforeDiscount
+      );
+    }
+  }
+
+  const subtotal = subtotalBeforeDiscount - membershipDiscount;
+  // Calculate credit adjustment (can't exceed subtotal + previousBalance)
+  const creditAdjustment = Math.min(creditBalance, subtotal + previousBalance);
+  const totalAmount = subtotal + previousBalance - creditAdjustment;
   const totalQty = items.reduce((sum, item) => sum + calculateItemSqf(item), 0);
 
   // Item handlers
@@ -638,12 +673,36 @@ export default function InstantInvoicePage() {
               <Grid size={{ xs: 12, md: 4 }}>
                 {clientData ? (
                   <Box>
-                    <Chip
-                      icon={<PersonIcon />}
-                      label={`Existing: ${clientData.clientId}`}
-                      color="success"
-                      sx={{ mb: 1 }}
-                    />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        mb: 1,
+                      }}
+                    >
+                      <Chip
+                        icon={<PersonIcon />}
+                        label={`Existing: ${clientData.clientId}`}
+                        color="success"
+                      />
+                      {isMembershipValid && (
+                        <Chip
+                          label={`Member (${
+                            clientData.membershipType === "PERCENTAGE"
+                              ? `${clientData.membershipDiscount}%`
+                              : `Rs.${clientData.membershipDiscount}`
+                          } off)`}
+                          color="warning"
+                          size="small"
+                          sx={{
+                            bgcolor:
+                              "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)",
+                            fontWeight: 600,
+                          }}
+                        />
+                      )}
+                    </Box>
                     {clientData.pendingBalance > 0 && (
                       <Box
                         sx={{ display: "flex", alignItems: "center", gap: 1 }}
@@ -654,6 +713,19 @@ export default function InstantInvoicePage() {
                         <Typography color="error" fontWeight={600}>
                           Pending: Rs.{" "}
                           {clientData.pendingBalance.toLocaleString()}
+                        </Typography>
+                      </Box>
+                    )}
+                    {clientData.creditBalance > 0 && (
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <AccountBalanceIcon
+                          sx={{ color: "#4caf50", fontSize: 20 }}
+                        />
+                        <Typography color="success.main" fontWeight={600}>
+                          Credit Balance: Rs.{" "}
+                          {clientData.creditBalance.toLocaleString()}
                         </Typography>
                       </Box>
                     )}
@@ -991,6 +1063,32 @@ export default function InstantInvoicePage() {
                     </Typography>
                   </Box>
                 )}
+                {membershipDiscount > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                      bgcolor:
+                        "linear-gradient(135deg, #fff8e1 0%, #fffde7 100%)",
+                      background: "#fff8e1",
+                      p: 1,
+                      mx: -1,
+                      border: "1px dashed #ffc107",
+                    }}
+                  >
+                    <Typography sx={{ color: "#f57c00", fontWeight: 600 }}>
+                      Member Discount (
+                      {clientData?.membershipType === "PERCENTAGE"
+                        ? `${clientData?.membershipDiscount}%`
+                        : `Rs.${clientData?.membershipDiscount}`}
+                      )
+                    </Typography>
+                    <Typography sx={{ color: "#f57c00", fontWeight: 700 }}>
+                      -{membershipDiscount.toLocaleString()}
+                    </Typography>
+                  </Box>
+                )}
                 <Box
                   sx={{
                     display: "flex",
@@ -1017,6 +1115,25 @@ export default function InstantInvoicePage() {
                     <Typography color="error">Prv. Balance</Typography>
                     <Typography color="error" fontWeight={500}>
                       {previousBalance.toLocaleString()}
+                    </Typography>
+                  </Box>
+                )}
+                {creditAdjustment > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                      bgcolor: "#e8f5e9",
+                      p: 1,
+                      mx: -1,
+                    }}
+                  >
+                    <Typography color="success.main">
+                      Credit Adjustment
+                    </Typography>
+                    <Typography color="success.main" fontWeight={500}>
+                      -{creditAdjustment.toLocaleString()}
                     </Typography>
                   </Box>
                 )}

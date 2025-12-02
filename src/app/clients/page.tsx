@@ -16,13 +16,16 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
+import CardMembershipIcon from "@mui/icons-material/CardMembership";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
+import MembershipBadge from "@/components/common/MembershipBadge";
 import { PhoneInput, CNICInput } from "@/components/common/MaskedInput";
 import { MainLayout } from "@/components/layout";
+import ManageMembershipDialog from "@/components/dialogs/ManageMembershipDialog";
 import { Client } from "@/types";
 
 export default function ClientsPage() {
@@ -30,6 +33,7 @@ export default function ClientsPage() {
   const router = useRouter();
   const [openDialog, setOpenDialog] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
+  const [membershipClient, setMembershipClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -67,7 +71,8 @@ export default function ClientsPage() {
     {
       id: "name",
       label: "Name",
-      minWidth: 150,
+      minWidth: 180,
+      format: (_, row) => <MembershipBadge client={row} showName />,
     },
     {
       id: "phone",
@@ -101,11 +106,11 @@ export default function ClientsPage() {
     {
       id: "actions",
       label: "Actions",
-      minWidth: 100,
+      minWidth: 140,
       align: "center",
       sortable: false,
       format: (_, row) => (
-        <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
+        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
           <Tooltip title="View Details">
             <IconButton
               size="small"
@@ -126,6 +131,20 @@ export default function ClientsPage() {
               }}
             >
               <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Membership">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMembershipClient(row);
+              }}
+              sx={{
+                color: row.hasMembership ? "warning.main" : "inherit",
+              }}
+            >
+              <CardMembershipIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -294,6 +313,17 @@ export default function ClientsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Membership Management Dialog */}
+      <ManageMembershipDialog
+        open={!!membershipClient}
+        client={membershipClient}
+        onClose={() => setMembershipClient(null)}
+        onSave={() => {
+          setRefreshKey((k) => k + 1);
+          setMembershipClient(null);
+        }}
+      />
     </MainLayout>
   );
 }
