@@ -28,6 +28,7 @@ import { StatCard, PaymentChart } from "@/components/dashboard";
 import StatusBadge from "@/components/common/StatusBadge";
 import TodayPaymentsDialog from "@/components/dialogs/TodayPaymentsDialog";
 import PendingAmountsDialog from "@/components/dialogs/PendingAmountsDialog";
+import PinDialog from "@/components/dialogs/PinDialog";
 import { DashboardStats } from "@/types";
 
 export default function DashboardPage() {
@@ -39,8 +40,13 @@ export default function DashboardPage() {
   const [pendingAmountsOpen, setPendingAmountsOpen] = useState(false);
   const [todayPaymentsCount, setTodayPaymentsCount] = useState(0);
   const [pendingClientsCount, setPendingClientsCount] = useState(0);
+  // Always require PIN on each visit - no session persistence
+  const [pinVerified, setPinVerifiedState] = useState(false);
 
   useEffect(() => {
+    // Only fetch data if PIN is verified
+    if (!pinVerified) return;
+
     const fetchStats = async () => {
       try {
         const response = await fetch("/api/dashboard");
@@ -81,7 +87,35 @@ export default function DashboardPage() {
 
     fetchStats();
     fetchCounts();
-  }, []);
+  }, [pinVerified]);
+
+  // Show PIN dialog if not verified (required on every visit)
+  if (!pinVerified) {
+    return (
+      <MainLayout>
+        <PinDialog
+          open={true}
+          onSuccess={() => setPinVerifiedState(true)}
+          title="Dashboard Access"
+          subtitle="Enter your PIN to view the dashboard"
+        />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "60vh",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <Typography variant="h5" color="text.secondary">
+            Dashboard is PIN protected
+          </Typography>
+        </Box>
+      </MainLayout>
+    );
+  }
 
   if (loading) {
     return (

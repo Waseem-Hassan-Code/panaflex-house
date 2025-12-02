@@ -1,11 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Box, Button, Typography, MenuItem, TextField } from "@mui/material";
+import {
+  Box,
+  Button,
+  Typography,
+  MenuItem,
+  TextField,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import DataGrid, { Column } from "@/components/common/DataGrid";
 import StatusBadge from "@/components/common/StatusBadge";
+import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import { MainLayout } from "@/components/layout";
 import { Invoice } from "@/types";
 
@@ -13,6 +25,8 @@ export default function InvoicesPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchInvoices = async (params: {
     page: number;
@@ -35,6 +49,28 @@ export default function InvoicesPage() {
 
     const response = await fetch(`/api/invoices?${queryParams}`);
     return response.json();
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!deleteInvoice) return;
+
+    try {
+      const response = await fetch(`/api/invoices/${deleteInvoice.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        toast.success("Invoice deleted successfully");
+        setRefreshKey((k) => k + 1);
+      } else {
+        const data = await response.json();
+        toast.error(data.error || "Failed to delete invoice");
+      }
+    } catch (error) {
+      toast.error("Failed to delete invoice");
+    } finally {
+      setDeleteInvoice(null);
+    }
   };
 
   const columns: Column<Invoice>[] = [
@@ -104,6 +140,41 @@ export default function InvoicesPage() {
       minWidth: 120,
       sortable: false,
     },
+    {
+      id: "actions",
+      label: "Actions",
+      minWidth: 100,
+      align: "center",
+      sortable: false,
+      format: (_, row) => (
+        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
+          <Tooltip title="View Details">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/invoices/${row.id}`);
+              }}
+            >
+              <VisibilityIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteInvoice(row);
+              }}
+              disabled={row.status === "PAID" || (row.paidAmount ?? 0) > 0}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
+    },
   ];
 
   return (
@@ -131,11 +202,22 @@ export default function InvoicesPage() {
       </Box>
 
       <DataGrid
-        key={statusFilter}
+        key={`${statusFilter}-${refreshKey}`}
         columns={columns}
         fetchData={fetchInvoices}
         onRowClick={(row) => router.push(`/invoices/${row.id}`)}
         searchPlaceholder="Search by invoice #, client name..."
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deleteInvoice}
+        title="Delete Invoice"
+        message={`Are you sure you want to delete invoice "${deleteInvoice?.invoiceNumber}"? This action cannot be undone.`}
+        confirmText="Delete"
+        confirmColor="error"
+        onConfirm={handleDeleteInvoice}
+        onCancel={() => setDeleteInvoice(null)}
       />
     </MainLayout>
   );

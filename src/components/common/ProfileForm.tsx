@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Card,
@@ -19,10 +19,17 @@ import {
   PhotoCamera as PhotoCameraIcon,
   Save as SaveIcon,
   Lock as LockIcon,
+  Pin as PinIcon,
 } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { useAppSelector, useAppDispatch } from "@/store";
 import { updateUserAvatar, setUser } from "@/store/authSlice";
+import {
+  getStoredPin,
+  setStoredPin,
+  clearPinVerification,
+} from "@/components/dialogs/PinDialog";
 
 export default function ProfileForm() {
   const { t } = useTranslation("common");
@@ -36,10 +43,21 @@ export default function ProfileForm() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // Dashboard PIN state
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  // Load current PIN hint
+  useEffect(() => {
+    const storedPin = getStoredPin();
+    // Just show that a PIN is set (for security, don't show actual PIN)
+  }, []);
 
   const handleAvatarUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,6 +185,37 @@ export default function ProfileForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePinChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    const storedPin = getStoredPin();
+
+    if (currentPin !== storedPin) {
+      setError("Current PIN is incorrect");
+      return;
+    }
+
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      setError("PIN must be exactly 4 digits");
+      return;
+    }
+
+    if (newPin !== confirmPin) {
+      setError("New PINs do not match");
+      return;
+    }
+
+    setStoredPin(newPin);
+    clearPinVerification(); // Require re-verification with new PIN
+    toast.success("Dashboard PIN changed successfully!");
+    setSuccess("Dashboard PIN changed successfully!");
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
   };
 
   return (
@@ -404,6 +453,97 @@ export default function ProfileForm() {
                       }}
                     >
                       {t("profile.change_password")}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </form>
+
+              <Divider sx={{ my: 4 }} />
+
+              {/* Dashboard PIN Section */}
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  mb: 3,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <PinIcon sx={{ color: "#1a237e" }} />
+                {t("profile.dashboard_pin", "Dashboard PIN")}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {t(
+                  "profile.dashboard_pin_description",
+                  "Set a 4-digit PIN to protect access to the dashboard. Default PIN is 1234."
+                )}
+              </Typography>
+              <form onSubmit={handlePinChange}>
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label={t("profile.current_pin", "Current PIN")}
+                      value={currentPin}
+                      onChange={(e) =>
+                        setCurrentPin(
+                          e.target.value.replace(/\D/g, "").slice(0, 4)
+                        )
+                      }
+                      inputProps={{ maxLength: 4, inputMode: "numeric" }}
+                      placeholder="****"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label={t("profile.new_pin", "New PIN")}
+                      value={newPin}
+                      onChange={(e) =>
+                        setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                      }
+                      inputProps={{ maxLength: 4, inputMode: "numeric" }}
+                      placeholder="****"
+                      helperText="Enter 4 digits"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      type="password"
+                      label={t("profile.confirm_pin", "Confirm New PIN")}
+                      value={confirmPin}
+                      onChange={(e) =>
+                        setConfirmPin(
+                          e.target.value.replace(/\D/g, "").slice(0, 4)
+                        )
+                      }
+                      inputProps={{ maxLength: 4, inputMode: "numeric" }}
+                      placeholder="****"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Button
+                      type="submit"
+                      variant="outlined"
+                      startIcon={<PinIcon />}
+                      sx={{
+                        borderColor: "#ff6f00",
+                        color: "#ff6f00",
+                        px: 4,
+                        py: 1.2,
+                        borderRadius: 2,
+                        "&:hover": {
+                          borderColor: "#f57c00",
+                          backgroundColor: "rgba(255, 111, 0, 0.04)",
+                        },
+                      }}
+                    >
+                      {t("profile.change_pin", "Change PIN")}
                     </Button>
                   </Grid>
                 </Grid>

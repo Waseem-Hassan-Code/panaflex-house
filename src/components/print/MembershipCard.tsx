@@ -129,7 +129,7 @@ const MembershipCard = forwardRef<HTMLDivElement, MembershipCardProps>(
                 letterSpacing: "1px",
               }}
             >
-              PANAFLEX HOUSE
+              KHARAIAN ADVERTISING AGENCY
             </Typography>
           </Box>
 

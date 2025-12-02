@@ -168,6 +168,9 @@ export default function InstantInvoicePage() {
     if (phoneNumber.length < 7) {
       setClientData(null);
       setIsNewClient(false);
+      if (phoneNumber.length === 0) {
+        setName(""); // Reset name when phone is cleared
+      }
       return;
     }
 
@@ -184,6 +187,7 @@ export default function InstantInvoicePage() {
         setIsNewClient(false);
       } else {
         setClientData(null);
+        setName(""); // Reset name when client not found
         setIsNewClient(true);
       }
     } catch (error) {
@@ -885,7 +889,7 @@ export default function InstantInvoicePage() {
                   );
                 })}
                 {/* Empty rows for print layout */}
-                {Array.from({ length: Math.max(0, 11 - items.length) }).map(
+                {Array.from({ length: Math.max(0, 6 - items.length) }).map(
                   (_, i) => (
                     <TableRow key={`empty-${i}`}>
                       <TableCell>{items.length + i + 1}</TableCell>

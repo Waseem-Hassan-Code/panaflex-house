@@ -22,7 +22,7 @@ import { PaymentReceived } from "@/types";
 interface EditPaymentDialogProps {
   open: boolean;
   onClose: () => void;
-  payment: PaymentReceived;
+  payment: PaymentReceived | null;
   onSuccess: () => void;
 }
 
@@ -59,7 +59,7 @@ export default function EditPaymentDialog({
     setError(null);
 
     try {
-      const response = await fetch(`/api/payments-received/${payment.id}`, {
+      const response = await fetch(`/api/payments-received/${payment?.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
