@@ -84,6 +84,23 @@ export async function PUT(
 
     const existingClient = await prisma.client.findUnique({
       where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        cnic: true,
+        isActive: true,
+        hasMembership: true,
+        membershipDiscount: true,
+        membershipType: true,
+        membershipStartDate: true,
+        membershipEndDate: true,
+        creditBalance: true,
+        isVerified: true,
+        isImported: true,
+      },
     });
 
     if (!existingClient) {
