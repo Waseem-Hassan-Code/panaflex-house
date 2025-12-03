@@ -30,6 +30,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -38,6 +39,8 @@ import { Client, Invoice, PaymentReceived } from "@/types";
 import ReceivePaymentDialog from "@/components/dialogs/ReceivePaymentDialog";
 import CreateInvoiceDialog from "@/components/dialogs/CreateInvoiceDialog";
 import EditPaymentDialog from "@/components/dialogs/EditPaymentDialog";
+import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
+import { toast } from "sonner";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -68,9 +71,13 @@ export default function ClientDetailPage({
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
+  const [showDeletePaymentDialog, setShowDeletePaymentDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [selectedPayment, setSelectedPayment] =
     useState<PaymentReceived | null>(null);
+  const [paymentToDelete, setPaymentToDelete] =
+    useState<PaymentReceived | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchClient = useCallback(async () => {
     setLoading(true);
@@ -112,6 +119,41 @@ export default function ClientDetailPage({
     setShowEditPaymentDialog(false);
     setSelectedPayment(null);
     fetchClient();
+  };
+
+  const handleDeletePayment = (payment: PaymentReceived) => {
+    setPaymentToDelete(payment);
+    setShowDeletePaymentDialog(true);
+  };
+
+  const confirmDeletePayment = async () => {
+    if (!paymentToDelete) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/payments-received/${paymentToDelete.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to delete payment");
+      }
+
+      toast.success("Payment deleted successfully");
+      setShowDeletePaymentDialog(false);
+      setPaymentToDelete(null);
+      fetchClient();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete payment"
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleInvoiceSuccess = () => {
@@ -574,15 +616,32 @@ export default function ClientDetailPage({
                       </TableCell>
                       <TableCell>{payment.createdBy?.name || "-"}</TableCell>
                       <TableCell align="center">
-                        <Tooltip title="Edit Payment">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleEditPayment(payment)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 0.5,
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Tooltip title="Edit Payment">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleEditPayment(payment)}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Payment">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeletePayment(payment)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))
@@ -627,6 +686,20 @@ export default function ClientDetailPage({
           onSuccess={handleEditPaymentSuccess}
         />
       )}
+
+      <ConfirmDialog
+        open={showDeletePaymentDialog}
+        title="Delete Payment"
+        message={`Are you sure you want to delete payment ${paymentToDelete?.receiptNumber}? This will update the invoice balance and cannot be undone.`}
+        confirmText="Delete"
+        onConfirm={confirmDeletePayment}
+        onCancel={() => {
+          setShowDeletePaymentDialog(false);
+          setPaymentToDelete(null);
+        }}
+        loading={deleting}
+        severity="error"
+      />
     </MainLayout>
   );
 }

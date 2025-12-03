@@ -1195,7 +1195,7 @@ export default function InstantInvoicePage() {
                       >
                         <MenuItem value="CASH">Cash</MenuItem>
                         <MenuItem value="CHEQUE">Cheque</MenuItem>
-                        <MenuItem value="BANK_TRANSFER">Bank</MenuItem>
+                        <MenuItem value="BANK">Bank</MenuItem>
                         <MenuItem value="ONLINE">Online</MenuItem>
                       </Select>
                     </FormControl>

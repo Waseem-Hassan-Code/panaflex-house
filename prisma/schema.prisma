@@ -102,6 +102,8 @@ model Client {
   membershipCardId    String?  @unique // Unique ID for QR code
   
   isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(true) // False for imported clients without valid phone
+  isImported   Boolean  @default(false) // True for clients imported from Excel
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -52,6 +52,8 @@ export interface Client {
   membershipCardId?: string | null;
 
   isActive: boolean;
+  isVerified?: boolean; // False for imported clients without valid phone
+  isImported?: boolean; // True for clients imported from Excel
   createdAt: Date;
   updatedAt: Date;
   createdById: string;

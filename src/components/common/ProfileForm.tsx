@@ -20,6 +20,7 @@ import {
   Save as SaveIcon,
   Lock as LockIcon,
   Pin as PinIcon,
+  DeleteForever as DeleteForeverIcon,
 } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ import {
   setStoredPin,
   clearPinVerification,
 } from "@/components/dialogs/PinDialog";
+import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 
 export default function ProfileForm() {
   const { t } = useTranslation("common");
@@ -52,6 +54,8 @@ export default function ProfileForm() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Load current PIN hint
   useEffect(() => {
@@ -216,6 +220,33 @@ export default function ProfileForm() {
     setCurrentPin("");
     setNewPin("");
     setConfirmPin("");
+  };
+
+  const handleDeleteAllData = async () => {
+    setDeleting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/clients/delete-all", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to delete data");
+      }
+
+      const result = await response.json();
+      toast.success(
+        `Successfully deleted ${result.clientsDeleted} clients and ${result.invoicesDeleted} invoices`
+      );
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete data");
+      setError(err instanceof Error ? err.message : "Failed to delete data");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -548,10 +579,79 @@ export default function ProfileForm() {
                   </Grid>
                 </Grid>
               </form>
+
+              <Divider sx={{ my: 4 }} />
+
+              {/* Danger Zone - Delete All Data */}
+              <Box
+                sx={{
+                  border: "1px solid #d32f2f",
+                  borderRadius: 2,
+                  p: 3,
+                  backgroundColor: "rgba(211, 47, 47, 0.02)",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                    mb: 1,
+                    color: "#d32f2f",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                  }}
+                >
+                  <DeleteForeverIcon />
+                  Danger Zone
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 2 }}
+                >
+                  This action will permanently delete ALL clients and their
+                  associated invoices and payments. This cannot be undone.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={
+                    deleting ? (
+                      <CircularProgress size={16} color="error" />
+                    ) : (
+                      <DeleteForeverIcon />
+                    )
+                  }
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                  sx={{
+                    borderColor: "#d32f2f",
+                    "&:hover": {
+                      backgroundColor: "rgba(211, 47, 47, 0.08)",
+                      borderColor: "#b71c1c",
+                    },
+                  }}
+                >
+                  Delete All Clients & Data
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete All Clients & Data"
+        message="Are you absolutely sure you want to delete ALL clients along with their invoices and payments? This action is IRREVERSIBLE and will permanently remove all client data from the system."
+        confirmText="Yes, Delete Everything"
+        onConfirm={handleDeleteAllData}
+        onCancel={() => setShowDeleteConfirm(false)}
+        loading={deleting}
+        severity="error"
+      />
     </Box>
   );
 }

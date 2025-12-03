@@ -3,6 +3,7 @@
 import { Chip, Tooltip, Box, Typography } from "@mui/material";
 import StarIcon from "@mui/icons-material/Star";
 import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { Client } from "@/types";
 
 interface MembershipBadgeProps {
@@ -36,9 +37,21 @@ export default function MembershipBadge({
 
   // If showName is true, render name with optional membership badge
   if (showName && client) {
+    const isUnverified = client.isVerified === false;
+
     return (
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
         <Typography variant="body2">{client.name}</Typography>
+        {isUnverified && (
+          <Tooltip title="Unverified - Missing phone number" arrow>
+            <WarningAmberIcon
+              sx={{
+                fontSize: 16,
+                color: "#ff9800",
+              }}
+            />
+          </Tooltip>
+        )}
         {isMembershipValid && (
           <StarIcon
             sx={{

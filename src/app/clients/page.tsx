@@ -17,6 +17,7 @@ import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import CardMembershipIcon from "@mui/icons-material/CardMembership";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import MembershipBadge from "@/components/common/MembershipBadge";
 import { PhoneInput, CNICInput } from "@/components/common/MaskedInput";
 import { MainLayout } from "@/components/layout";
 import ManageMembershipDialog from "@/components/dialogs/ManageMembershipDialog";
+import UploadRecordsDialog from "@/components/dialogs/UploadRecordsDialog";
 import { Client } from "@/types";
 
 export default function ClientsPage() {
@@ -34,6 +36,7 @@ export default function ClientsPage() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
   const [membershipClient, setMembershipClient] = useState<Client | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -228,13 +231,23 @@ export default function ClientsPage() {
         <Typography variant="h4" fontWeight="bold">
           {t("clients.title", "Clients")}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenDialog}
-        >
-          {t("clients.addNew", "Add Client")}
-        </Button>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<CloudUploadIcon />}
+            onClick={() => setUploadDialogOpen(true)}
+            sx={{ borderColor: "#1a237e", color: "#1a237e" }}
+          >
+            Upload Records
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenDialog}
+          >
+            {t("clients.addNew", "Add Client")}
+          </Button>
+        </Box>
       </Box>
 
       <DataGrid
@@ -322,6 +335,16 @@ export default function ClientsPage() {
         onSave={() => {
           setRefreshKey((k) => k + 1);
           setMembershipClient(null);
+        }}
+      />
+
+      {/* Upload Records Dialog */}
+      <UploadRecordsDialog
+        open={uploadDialogOpen}
+        onClose={() => setUploadDialogOpen(false)}
+        onSuccess={() => {
+          setRefreshKey((k) => k + 1);
+          setUploadDialogOpen(false);
         }}
       />
     </MainLayout>
