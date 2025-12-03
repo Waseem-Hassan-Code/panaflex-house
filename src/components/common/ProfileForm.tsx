@@ -650,7 +650,7 @@ export default function ProfileForm() {
         onConfirm={handleDeleteAllData}
         onCancel={() => setShowDeleteConfirm(false)}
         loading={deleting}
-        severity="error"
+        confirmColor="error"
       />
     </Box>
   );

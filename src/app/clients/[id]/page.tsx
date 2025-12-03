@@ -698,7 +698,7 @@ export default function ClientDetailPage({
           setPaymentToDelete(null);
         }}
         loading={deleting}
-        severity="error"
+        confirmColor="error"
       />
     </MainLayout>
   );
