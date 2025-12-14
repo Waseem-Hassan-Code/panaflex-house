@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Box,
   Button,
@@ -12,7 +12,12 @@ import {
   Typography,
   IconButton,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  InputAdornment,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
@@ -43,117 +48,143 @@ export default function ClientsPage() {
     phone: "",
     address: "",
     cnic: "",
+    previousBalance: "",
+    voucherNumber: "",
   });
+  const [previousBalanceExpanded, setPreviousBalanceExpanded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchClients = async (params: {
-    page: number;
-    pageSize: number;
-    search: string;
-    sortBy: string;
-    sortOrder: "asc" | "desc";
-  }) => {
-    const queryParams = new URLSearchParams({
-      page: String(params.page),
-      pageSize: String(params.pageSize),
-      search: params.search,
-      sortBy: params.sortBy,
-      sortOrder: params.sortOrder,
+  const fetchClients = useCallback(
+    async (params: {
+      page: number;
+      pageSize: number;
+      search: string;
+      sortBy: string;
+      sortOrder: "asc" | "desc";
+    }) => {
+      const queryParams = new URLSearchParams({
+        page: String(params.page),
+        pageSize: String(params.pageSize),
+        search: params.search,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder,
+      });
+
+      const response = await fetch(`/api/clients?${queryParams}`);
+      return response.json();
+    },
+    []
+  );
+
+  const handleEdit = useCallback((client: Client) => {
+    setEditClient(client);
+    setFormData({
+      name: client.name,
+      email: client.email || "",
+      phone: client.phone,
+      address: client.address || "",
+      cnic: client.cnic || "",
+      previousBalance: "",
+      voucherNumber: "",
     });
+    setPreviousBalanceExpanded(false);
+    setOpenDialog(true);
+  }, []);
 
-    const response = await fetch(`/api/clients?${queryParams}`);
-    return response.json();
-  };
-
-  const columns: Column<Client>[] = [
-    {
-      id: "clientId",
-      label: "Client ID",
-      minWidth: 120,
-    },
-    {
-      id: "name",
-      label: "Name",
-      minWidth: 180,
-      format: (_, row) => <MembershipBadge client={row} showName />,
-    },
-    {
-      id: "phone",
-      label: "Phone",
-      minWidth: 130,
-    },
-    {
-      id: "email",
-      label: "Email",
-      minWidth: 180,
-    },
-    {
-      id: "totalBalance",
-      label: "Balance Due",
-      minWidth: 120,
-      align: "right",
-      format: (value) => `Rs. ${((value as number) || 0).toLocaleString()}`,
-    },
-    {
-      id: "isActive",
-      label: "Status",
-      minWidth: 100,
-      format: (value) => <StatusBadge status={value ? "ACTIVE" : "INACTIVE"} />,
-    },
-    {
-      id: "createdBy.name",
-      label: "Created By",
-      minWidth: 120,
-      sortable: false,
-    },
-    {
-      id: "actions",
-      label: "Actions",
-      minWidth: 140,
-      align: "center",
-      sortable: false,
-      format: (_, row) => (
-        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
-          <Tooltip title="View Details">
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/clients/${row.id}`);
-              }}
-            >
-              <VisibilityIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEdit(row);
-              }}
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Membership">
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMembershipClient(row);
-              }}
-              sx={{
-                color: row.hasMembership ? "warning.main" : "inherit",
-              }}
-            >
-              <CardMembershipIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      ),
-    },
-  ];
+  const columns: Column<Client>[] = useMemo(
+    () => [
+      {
+        id: "clientId",
+        label: "Client ID",
+        minWidth: 120,
+      },
+      {
+        id: "name",
+        label: "Name",
+        minWidth: 180,
+        format: (_, row) => <MembershipBadge client={row} showName />,
+      },
+      {
+        id: "phone",
+        label: "Phone",
+        minWidth: 130,
+      },
+      {
+        id: "email",
+        label: "Email",
+        minWidth: 180,
+      },
+      {
+        id: "totalBalance",
+        label: "Balance Due",
+        minWidth: 120,
+        align: "right",
+        format: (value) => `Rs. ${((value as number) || 0).toLocaleString()}`,
+      },
+      {
+        id: "isActive",
+        label: "Status",
+        minWidth: 100,
+        format: (value) => (
+          <StatusBadge status={value ? "ACTIVE" : "INACTIVE"} />
+        ),
+      },
+      {
+        id: "createdBy.name",
+        label: "Created By",
+        minWidth: 120,
+        sortable: false,
+      },
+      {
+        id: "actions",
+        label: "Actions",
+        minWidth: 140,
+        align: "center",
+        sortable: false,
+        format: (_, row) => (
+          <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
+            <Tooltip title="View Details">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/clients/${row.id}`);
+                }}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEdit(row);
+                }}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Membership">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMembershipClient(row);
+                }}
+                sx={{
+                  color: row.hasMembership ? "warning.main" : "inherit",
+                }}
+              >
+                <CardMembershipIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [router, handleEdit]
+  );
 
   const handleOpenDialog = () => {
     setEditClient(null);
@@ -163,19 +194,10 @@ export default function ClientsPage() {
       phone: "",
       address: "",
       cnic: "",
+      previousBalance: "",
+      voucherNumber: "",
     });
-    setOpenDialog(true);
-  };
-
-  const handleEdit = (client: Client) => {
-    setEditClient(client);
-    setFormData({
-      name: client.name,
-      email: client.email || "",
-      phone: client.phone,
-      address: client.address || "",
-      cnic: client.cnic || "",
-    });
+    setPreviousBalanceExpanded(false);
     setOpenDialog(true);
   };
 
@@ -189,10 +211,23 @@ export default function ClientsPage() {
       const url = editClient ? `/api/clients/${editClient.id}` : "/api/clients";
       const method = editClient ? "PUT" : "POST";
 
+      // Build request body - include previousBalance only for new clients
+      const requestBody = {
+        ...formData,
+        previousBalance:
+          !editClient && formData.previousBalance
+            ? parseFloat(formData.previousBalance)
+            : undefined,
+        voucherNumber:
+          !editClient && formData.previousBalance
+            ? formData.voucherNumber || undefined
+            : undefined,
+      };
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -263,6 +298,7 @@ export default function ClientsPage() {
         onClose={handleCloseDialog}
         maxWidth="sm"
         fullWidth
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <DialogTitle>
           {editClient
@@ -313,6 +349,71 @@ export default function ClientsPage() {
               rows={2}
               fullWidth
             />
+
+            {/* Previous Balance Section - Only show for new clients */}
+            {!editClient && (
+              <Accordion
+                expanded={previousBalanceExpanded}
+                onChange={(_, expanded) => setPreviousBalanceExpanded(expanded)}
+                sx={{
+                  mt: 1,
+                  boxShadow: "none",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: "8px !important",
+                  "&:before": { display: "none" },
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    minHeight: 48,
+                    "& .MuiAccordionSummary-content": { my: 1 },
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Previous Balance (Optional)
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 0 }}>
+                  <Box
+                    sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                  >
+                    <TextField
+                      label="Previous Balance"
+                      type="number"
+                      value={formData.previousBalance}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          previousBalance: e.target.value,
+                        })
+                      }
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">Rs.</InputAdornment>
+                        ),
+                      }}
+                      placeholder="Enter previous balance amount"
+                      fullWidth
+                    />
+                    <TextField
+                      label="Voucher Number"
+                      value={formData.voucherNumber}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          voucherNumber: e.target.value,
+                        })
+                      }
+                      placeholder="Leave empty for auto-generated"
+                      helperText="If left empty, a voucher number will be automatically generated"
+                      fullWidth
+                    />
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

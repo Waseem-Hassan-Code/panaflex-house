@@ -1,11 +1,12 @@
 import { prisma } from "./prisma";
 
-export type SequenceType = "CLIENT" | "INVOICE" | "RECEIPT";
+export type SequenceType = "CLIENT" | "INVOICE" | "RECEIPT" | "VOUCHER";
 
 const PREFIXES: Record<SequenceType, string> = {
   CLIENT: "CLIENT_",
   INVOICE: "INV_",
   RECEIPT: "REC_",
+  VOUCHER: "V_",
 };
 
 export async function getNextSequence(type: SequenceType): Promise<string> {
@@ -20,7 +21,7 @@ export async function getNextSequence(type: SequenceType): Promise<string> {
 }
 
 export async function initializeSequences() {
-  const types: SequenceType[] = ["CLIENT", "INVOICE", "RECEIPT"];
+  const types: SequenceType[] = ["CLIENT", "INVOICE", "RECEIPT", "VOUCHER"];
 
   for (const type of types) {
     await prisma.sequence.upsert({

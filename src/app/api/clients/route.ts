@@ -94,7 +94,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, email, phone, address, cnic } = body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      cnic,
+      previousBalance,
+      voucherNumber,
+    } = body;
 
     if (!name || !phone) {
       return NextResponse.json(
@@ -106,37 +114,118 @@ export async function POST(request: NextRequest) {
     // Generate auto client ID
     const clientId = await getNextSequence("CLIENT");
 
-    const client = await prisma.client.create({
-      data: {
-        clientId,
-        name,
-        email,
-        phone,
-        address,
-        cnic,
-        createdById: session.user.id,
-      },
-      include: {
-        createdBy: { select: { id: true, name: true, email: true } },
-      },
-    });
+    // Use transaction if there's a previous balance to handle
+    const hasPreviousBalance = previousBalance && previousBalance > 0;
 
-    // Create transaction log
-    await prisma.transactionLog.create({
-      data: {
-        entityType: "CLIENT",
-        entityId: client.id,
-        action: "CREATE",
-        userId: session.user.id,
-        details: {
-          clientId: client.clientId,
-          name: client.name,
-          phone: client.phone,
+    if (hasPreviousBalance) {
+      // Use transaction to create client and voucher together
+      const result = await prisma.$transaction(async (tx) => {
+        // Create client
+        const client = await tx.client.create({
+          data: {
+            clientId,
+            name,
+            email,
+            phone,
+            address,
+            cnic,
+            createdById: session.user.id,
+          },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+          },
+        });
+
+        // Generate voucher number if not provided
+        let finalVoucherNumber = voucherNumber?.trim();
+        if (!finalVoucherNumber) {
+          finalVoucherNumber = await getNextSequence("VOUCHER");
+        }
+
+        // Create invoice for previous balance
+        const invoice = await tx.invoice.create({
+          data: {
+            invoiceNumber: finalVoucherNumber,
+            clientId: client.id,
+            invoiceDate: new Date(),
+            subtotal: previousBalance,
+            totalAmount: previousBalance,
+            balanceDue: previousBalance,
+            status: "UNPAID",
+            notes: "Previous Balance - Opening balance",
+            createdById: session.user.id,
+          },
+        });
+
+        // Create transaction log for client
+        await tx.transactionLog.create({
+          data: {
+            entityType: "CLIENT",
+            entityId: client.id,
+            action: "CREATE",
+            userId: session.user.id,
+            details: {
+              clientId: client.clientId,
+              name: client.name,
+              phone: client.phone,
+            },
+          },
+        });
+
+        // Create transaction log for previous balance invoice
+        await tx.transactionLog.create({
+          data: {
+            entityType: "INVOICE",
+            entityId: invoice.id,
+            action: "CREATE",
+            userId: session.user.id,
+            details: {
+              invoiceNumber: invoice.invoiceNumber,
+              clientName: client.name,
+              totalAmount: invoice.totalAmount,
+              type: "Previous Balance",
+            },
+          },
+        });
+
+        return { client, invoice };
+      });
+
+      return NextResponse.json(result.client, { status: 201 });
+    } else {
+      // No previous balance - simple client creation
+      const client = await prisma.client.create({
+        data: {
+          clientId,
+          name,
+          email,
+          phone,
+          address,
+          cnic,
+          createdById: session.user.id,
         },
-      },
-    });
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+        },
+      });
 
-    return NextResponse.json(client, { status: 201 });
+      // Create transaction log
+      await prisma.transactionLog.create({
+        data: {
+          entityType: "CLIENT",
+          entityId: client.id,
+          action: "CREATE",
+          userId: session.user.id,
+          details: {
+            clientId: client.clientId,
+            name: client.name,
+            phone: client.phone,
+          },
+        },
+      });
+
+      return NextResponse.json(client, { status: 201 });
+    }
   } catch (error) {
     console.error("Error creating client:", error);
     return NextResponse.json(
