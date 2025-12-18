@@ -16,17 +16,17 @@ export async function GET(request: NextRequest) {
     // Get phone variants for smart phone search
     const phoneVariants = getPhoneSearchVariants(query);
     const phoneConditions = phoneVariants.map((variant) => ({
-      phone: { contains: variant },
+      phone: { contains: variant, mode: "insensitive" as const },
     }));
 
-    // Search clients with smart phone search
+    // Search clients with smart phone search (case-insensitive)
     const clients = await prisma.client.findMany({
       where: {
         OR: [
-          { name: { contains: query } },
-          { clientId: { contains: query } },
-          { email: { contains: query } },
-          { cnic: { contains: query } },
+          { name: { contains: query, mode: "insensitive" } },
+          { clientId: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
+          { cnic: { contains: query, mode: "insensitive" } },
           // Add all phone format variants
           ...phoneConditions,
         ],
@@ -41,13 +41,13 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
-    // Search invoices
+    // Search invoices (case-insensitive)
     const invoices = await prisma.invoice.findMany({
       where: {
         OR: [
-          { invoiceNumber: { contains: query } },
-          { client: { name: { contains: query } } },
-          { client: { clientId: { contains: query } } },
+          { invoiceNumber: { contains: query, mode: "insensitive" } },
+          { client: { name: { contains: query, mode: "insensitive" } } },
+          { client: { clientId: { contains: query, mode: "insensitive" } } },
         ],
       },
       select: {
@@ -62,13 +62,17 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
-    // Search payments
+    // Search payments (case-insensitive)
     const payments = await prisma.paymentReceived.findMany({
       where: {
         OR: [
-          { receiptNumber: { contains: query } },
-          { client: { name: { contains: query } } },
-          { invoice: { invoiceNumber: { contains: query } } },
+          { receiptNumber: { contains: query, mode: "insensitive" } },
+          { client: { name: { contains: query, mode: "insensitive" } } },
+          {
+            invoice: {
+              invoiceNumber: { contains: query, mode: "insensitive" },
+            },
+          },
         ],
       },
       select: {

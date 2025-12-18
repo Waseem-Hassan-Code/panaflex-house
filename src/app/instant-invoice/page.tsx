@@ -13,6 +13,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableFooter,
   IconButton,
   Divider,
   Alert,
@@ -28,6 +29,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import {
@@ -43,6 +46,9 @@ import {
   History as HistoryIcon,
   AccountBalance as AccountBalanceIcon,
   FileDownload as FileDownloadIcon,
+  PictureAsPdf as PdfIcon,
+  Percent as PercentIcon,
+  AttachMoney as MoneyIcon,
 } from "@mui/icons-material";
 import { toast } from "sonner";
 import { MainLayout } from "@/components/layout";
@@ -92,6 +98,7 @@ interface InvoiceHistory {
   subtotal: number;
   labourCost: number;
   itemsSubtotal: number;
+  discount: number;
   previousBalance: number;
   totalAmount: number;
   paidAmount: number;
@@ -142,6 +149,12 @@ export default function InstantInvoicePage() {
   const [items, setItems] = useState<InvoiceItem[]>([{ ...emptyItem }]);
   const [labourCosts, setLabourCosts] = useState<LabourCost[]>([]);
   const [notes, setNotes] = useState("");
+
+  // Discount state
+  const [discountType, setDiscountType] = useState<"percentage" | "amount">(
+    "amount"
+  );
+  const [discountValue, setDiscountValue] = useState<number>(0);
 
   // Payment at invoice creation
   const [paidAmount, setPaidAmount] = useState<number>(0);
@@ -243,7 +256,18 @@ export default function InstantInvoicePage() {
   const creditBalance = clientData?.creditBalance || 0;
   const totalLabour = labourCosts.reduce((sum, l) => sum + (l.amount || 0), 0);
   // Subtract labour cost from items subtotal
-  const subtotalBeforeDiscount = itemsSubtotal - totalLabour;
+  const subtotalAfterLabour = itemsSubtotal - totalLabour;
+
+  // Calculate manual discount
+  let manualDiscount = 0;
+  if (discountValue > 0) {
+    if (discountType === "percentage") {
+      manualDiscount = Math.round((subtotalAfterLabour * discountValue) / 100);
+    } else {
+      manualDiscount = Math.min(discountValue, subtotalAfterLabour);
+    }
+  }
+  const subtotalBeforeDiscount = subtotalAfterLabour - manualDiscount;
 
   // Check if client has valid membership
   const isMembershipValid =
@@ -350,6 +374,15 @@ export default function InstantInvoicePage() {
           items: validItems,
           labourCosts: labourCosts.filter((l) => l.description && l.amount > 0),
           notes,
+          // Include discount if value > 0
+          discount:
+            discountValue > 0
+              ? {
+                  type: discountType,
+                  value: discountValue,
+                  amount: manualDiscount,
+                }
+              : null,
           // Include payment if amount > 0
           payment:
             paidAmount > 0
@@ -377,6 +410,9 @@ export default function InstantInvoicePage() {
         } | Total: Rs. ${totalAmount.toLocaleString()}${paymentMsg}`,
       });
 
+      // Open print dialog automatically after creating invoice
+      setPrintDialogOpen(true);
+
       // Reset form
       setItems([{ ...emptyItem }]);
       setLabourCosts([]);
@@ -385,6 +421,8 @@ export default function InstantInvoicePage() {
       setPhone("");
       setPaidAmount(0);
       setPaymentMethod("CASH");
+      setDiscountType("amount");
+      setDiscountValue(0);
       setClientData(null);
       setIsNewClient(false);
     } catch (err) {
@@ -907,6 +945,52 @@ export default function InstantInvoicePage() {
                   )
                 )}
               </TableBody>
+              {/* Accumulative Totals Row */}
+              <TableFooter>
+                <TableRow sx={{ bgcolor: "#e3f2fd" }}>
+                  <TableCell
+                    colSpan={5}
+                    align="right"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#1a237e",
+                      border: "2px solid #1a237e",
+                    }}
+                  >
+                    TOTALS:
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#4caf50",
+                      border: "2px solid #1a237e",
+                    }}
+                  >
+                    {totalQty.toFixed(2)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontWeight: 700, border: "2px solid #1a237e" }}
+                  >
+                    -
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#1a237e",
+                      border: "2px solid #1a237e",
+                    }}
+                  >
+                    {itemsSubtotal.toLocaleString()}
+                  </TableCell>
+                  <TableCell
+                    className="no-print"
+                    sx={{ border: "2px solid #1a237e" }}
+                  ></TableCell>
+                </TableRow>
+              </TableFooter>
             </Table>
           </TableContainer>
 
@@ -1012,6 +1096,78 @@ export default function InstantInvoicePage() {
                 )}
               </Paper>
 
+              {/* Discount Section */}
+              <Paper
+                variant="outlined"
+                sx={{ p: 2, mb: 2, bgcolor: "#fff8e1" }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 2,
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={600}
+                    color="warning.dark"
+                  >
+                    Discount
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={discountType}
+                    exclusive
+                    onChange={(_, value) => value && setDiscountType(value)}
+                    size="small"
+                  >
+                    <ToggleButton value="amount" sx={{ px: 2 }}>
+                      <MoneyIcon fontSize="small" sx={{ mr: 0.5 }} />
+                      Rs.
+                    </ToggleButton>
+                    <ToggleButton value="percentage" sx={{ px: 2 }}>
+                      <PercentIcon fontSize="small" sx={{ mr: 0.5 }} />%
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    placeholder={
+                      discountType === "percentage" ? "Enter %" : "Enter Amount"
+                    }
+                    value={discountValue || ""}
+                    onChange={(e) =>
+                      setDiscountValue(parseFloat(e.target.value) || 0)
+                    }
+                    sx={{ flex: 1 }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          {discountType === "percentage" ? "%" : "Rs."}
+                        </InputAdornment>
+                      ),
+                    }}
+                    inputProps={{
+                      min: 0,
+                      max: discountType === "percentage" ? 100 : undefined,
+                    }}
+                  />
+                  {discountValue > 0 && (
+                    <Box sx={{ textAlign: "right" }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Discount Amount:
+                      </Typography>
+                      <Typography fontWeight={600} color="warning.dark">
+                        Rs. {manualDiscount.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Paper>
+
               {/* Bank Details */}
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2" fontWeight={600} gutterBottom>
@@ -1064,6 +1220,30 @@ export default function InstantInvoicePage() {
                     </Typography>
                     <Typography color="warning.dark" fontWeight={500}>
                       -{totalLabour.toLocaleString()}
+                    </Typography>
+                  </Box>
+                )}
+                {manualDiscount > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                      bgcolor: "#fff8e1",
+                      p: 1,
+                      mx: -1,
+                      border: "1px dashed #ff9800",
+                    }}
+                  >
+                    <Typography sx={{ color: "#e65100", fontWeight: 600 }}>
+                      Discount (
+                      {discountType === "percentage"
+                        ? `${discountValue}%`
+                        : `Rs.${discountValue}`}
+                      )
+                    </Typography>
+                    <Typography sx={{ color: "#e65100", fontWeight: 700 }}>
+                      -{manualDiscount.toLocaleString()}
                     </Typography>
                   </Box>
                 )}
@@ -1214,16 +1394,20 @@ export default function InstantInvoicePage() {
                     {paidAmount.toLocaleString()}
                   </Typography>
                 </Box>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 1,
-                  }}
-                >
-                  <Typography>Discount</Typography>
-                  <Typography fontWeight={500}>-</Typography>
-                </Box>
+                {(manualDiscount > 0 || membershipDiscount > 0) && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography>Discount Applied</Typography>
+                    <Typography fontWeight={500} color="warning.dark">
+                      {(manualDiscount + membershipDiscount).toLocaleString()}
+                    </Typography>
+                  </Box>
+                )}
                 <Divider sx={{ my: 1 }} />
                 <Box
                   sx={{
@@ -1284,15 +1468,8 @@ export default function InstantInvoicePage() {
           className="no-print"
         >
           <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrintNewInvoice}
-            disabled={!createdInvoice}
-          >
-            Print Invoice
-          </Button>
-          <Button
             variant="contained"
+            startIcon={loading ? null : <PdfIcon />}
             onClick={handleSubmit}
             disabled={loading}
             sx={{
@@ -1301,7 +1478,7 @@ export default function InstantInvoicePage() {
               px: 4,
             }}
           >
-            {loading ? "Creating..." : "Generate Invoice"}
+            {loading ? "Creating..." : "Generate Invoice & PDF"}
           </Button>
         </Box>
       </Box>
@@ -1364,6 +1541,9 @@ export default function InstantInvoicePage() {
                 }
                 itemsSubtotal={createdInvoice.itemsSubtotal || itemsSubtotal}
                 labourCost={createdInvoice.labourCost || totalLabour}
+                manualDiscount={createdInvoice.manualDiscount || 0}
+                manualDiscountType={createdInvoice.manualDiscountType}
+                manualDiscountValue={createdInvoice.manualDiscountValue}
                 subtotal={createdInvoice.subtotal || subtotal}
                 previousBalance={createdInvoice.previousBalance || 0}
                 totalAmount={createdInvoice.totalAmount || totalAmount}
@@ -1471,6 +1651,7 @@ export default function InstantInvoicePage() {
                   items={currentHistoryInvoice.items}
                   itemsSubtotal={currentHistoryInvoice.itemsSubtotal}
                   labourCost={currentHistoryInvoice.labourCost || 0}
+                  discount={currentHistoryInvoice.discount || 0}
                   subtotal={currentHistoryInvoice.subtotal}
                   previousBalance={currentHistoryInvoice.previousBalance || 0}
                   totalAmount={currentHistoryInvoice.totalAmount}
@@ -1632,6 +1813,26 @@ export default function InstantInvoicePage() {
                       </Typography>
                     </Box>
                   )}
+                  {currentHistoryInvoice.discount > 0 && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                        bgcolor: "#fff8e1",
+                        p: 1,
+                        mx: -1,
+                        border: "1px dashed #ff9800",
+                      }}
+                    >
+                      <Typography sx={{ color: "#e65100", fontWeight: 600 }}>
+                        Discount Applied:
+                      </Typography>
+                      <Typography sx={{ color: "#e65100", fontWeight: 700 }}>
+                        -Rs. {currentHistoryInvoice.discount.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                   <Box
                     sx={{
                       display: "flex",
@@ -1643,7 +1844,8 @@ export default function InstantInvoicePage() {
                     }}
                   >
                     <Typography fontWeight={600}>
-                      {currentHistoryInvoice.labourCost > 0
+                      {currentHistoryInvoice.labourCost > 0 ||
+                      currentHistoryInvoice.discount > 0
                         ? "Net Amount:"
                         : "Subtotal:"}
                     </Typography>

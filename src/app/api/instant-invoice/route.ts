@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       items,
       labourCosts,
       notes,
+      discount,
       payment,
     } = body;
 
@@ -201,7 +202,21 @@ export async function POST(request: NextRequest) {
       );
 
       // Subtotal = Items total - Labour costs (labour is deducted)
-      const subtotalBeforeDiscount = itemsSubtotal - totalLabourCost;
+      const subtotalAfterLabour = itemsSubtotal - totalLabourCost;
+
+      // Apply manual discount if provided
+      let manualDiscountAmount = 0;
+      if (discount && discount.value > 0) {
+        if (discount.type === "percentage") {
+          manualDiscountAmount = Math.round(
+            (subtotalAfterLabour * discount.value) / 100
+          );
+        } else {
+          manualDiscountAmount = Math.min(discount.value, subtotalAfterLabour);
+        }
+      }
+
+      const subtotalBeforeDiscount = subtotalAfterLabour - manualDiscountAmount;
 
       // Apply membership discount if valid
       let membershipDiscount = 0;
@@ -230,6 +245,14 @@ export async function POST(request: NextRequest) {
 
       // Build notes with discount info
       let invoiceNotes = notes || "";
+      if (manualDiscountAmount > 0) {
+        const discountInfo =
+          discount.type === "percentage"
+            ? `${discount.value}%`
+            : `Rs. ${discount.value}`;
+        invoiceNotes =
+          `${invoiceNotes} [Discount: ${discountInfo} = Rs. ${manualDiscountAmount}]`.trim();
+      }
       if (membershipDiscount > 0) {
         const discountType =
           client.membershipType === "PERCENTAGE"
@@ -249,6 +272,7 @@ export async function POST(request: NextRequest) {
           invoiceNumber,
           clientId: client.id,
           subtotal,
+          discount: manualDiscountAmount + membershipDiscount, // Store total discount applied
           previousBalance,
           totalAmount: subtotal + previousBalance,
           balanceDue: totalAmount,
@@ -379,6 +403,9 @@ export async function POST(request: NextRequest) {
             clientName: client.name,
             itemsSubtotal,
             labourCost: totalLabourCost,
+            manualDiscount: manualDiscountAmount,
+            manualDiscountType: discount?.type || null,
+            manualDiscountValue: discount?.value || null,
             membershipDiscount,
             membershipType: client.membershipType,
             subtotal,
@@ -404,6 +431,9 @@ export async function POST(request: NextRequest) {
         clientName: client.name,
         itemsSubtotal,
         labourCost: totalLabourCost,
+        manualDiscount: manualDiscountAmount,
+        manualDiscountType: discount?.type || null,
+        manualDiscountValue: discount?.value || null,
         membershipDiscount,
         membershipType: client.membershipType,
         subtotal,

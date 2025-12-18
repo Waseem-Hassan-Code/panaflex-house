@@ -38,11 +38,12 @@ export async function GET(
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Calculate total balance
-    const totalBalance = client.invoices.reduce(
-      (sum, inv) => sum + inv.balanceDue,
-      0
+    // Get the latest unpaid/partial invoice to calculate total balance
+    // The latest invoice's balanceDue already includes any carried-forward balance
+    const latestUnpaidInvoice = client.invoices.find(
+      (inv) => inv.status === "UNPAID" || inv.status === "PARTIAL"
     );
+    const totalBalance = latestUnpaidInvoice?.balanceDue || 0;
 
     return NextResponse.json({ ...client, totalBalance });
   } catch (error) {

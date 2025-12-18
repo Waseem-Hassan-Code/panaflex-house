@@ -30,6 +30,9 @@ interface PrintInvoiceProps {
   items: InvoiceItem[];
   itemsSubtotal?: number;
   labourCost?: number;
+  manualDiscount?: number;
+  manualDiscountType?: string | null;
+  manualDiscountValue?: number | null;
   subtotal: number;
   previousBalance: number;
   totalAmount: number;
@@ -52,6 +55,9 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
       items,
       itemsSubtotal,
       labourCost = 0,
+      manualDiscount = 0,
+      manualDiscountType,
+      manualDiscountValue,
       subtotal,
       previousBalance,
       totalAmount,
@@ -671,6 +677,56 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
                     </tr>
                   </>
                 )}
+                {manualDiscount > 0 && (
+                  <tr style={{ backgroundColor: "#fff8e1" }}>
+                    <td
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "6px 10px",
+                        color: "#e65100",
+                      }}
+                    >
+                      Discount{" "}
+                      {manualDiscountType === "percentage"
+                        ? `(${manualDiscountValue}%)`
+                        : ""}
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "6px 10px",
+                        textAlign: "right",
+                        color: "#e65100",
+                      }}
+                    >
+                      -{manualDiscount.toLocaleString()}
+                    </td>
+                  </tr>
+                )}
+                {/* Show discount from history if manualDiscount not provided */}
+                {manualDiscount === 0 && discount > 0 && (
+                  <tr style={{ backgroundColor: "#fff8e1" }}>
+                    <td
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "6px 10px",
+                        color: "#e65100",
+                      }}
+                    >
+                      Discount
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "6px 10px",
+                        textAlign: "right",
+                        color: "#e65100",
+                      }}
+                    >
+                      -{discount.toLocaleString()}
+                    </td>
+                  </tr>
+                )}
                 <tr style={{ backgroundColor: "#e3f2fd" }}>
                   <td
                     style={{
@@ -679,7 +735,9 @@ const PrintInvoice = forwardRef<HTMLDivElement, PrintInvoiceProps>(
                       fontWeight: 600,
                     }}
                   >
-                    {labourCost > 0 ? "Net Amount" : "Total Amount"}
+                    {labourCost > 0 || manualDiscount > 0 || discount > 0
+                      ? "Net Amount"
+                      : "Total Amount"}
                   </td>
                   <td
                     style={{

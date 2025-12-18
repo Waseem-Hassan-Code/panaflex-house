@@ -41,18 +41,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ found: false });
     }
 
-    // Calculate pending balance
-    const allUnpaidInvoices = await prisma.invoice.findMany({
+    // Get the most recent unpaid/partial invoice to get the actual pending balance
+    // The latest invoice's balanceDue already includes any previous carried-forward balance
+    const latestUnpaidInvoice = await prisma.invoice.findFirst({
       where: {
         clientId: client.id,
         status: { in: ["UNPAID", "PARTIAL"] },
       },
+      orderBy: { createdAt: "desc" },
     });
 
-    const pendingBalance = allUnpaidInvoices.reduce(
-      (sum, inv) => sum + inv.balanceDue,
-      0
-    );
+    // The pending balance is the balanceDue of the latest unpaid invoice
+    // since it already includes any carried-forward balance from previous invoices
+    const pendingBalance = latestUnpaidInvoice?.balanceDue || 0;
 
     const lastInvoice = client.invoices[0];
 

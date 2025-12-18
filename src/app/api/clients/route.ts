@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
               balanceDue: true,
               status: true,
             },
+            orderBy: { createdAt: "desc" },
           },
         },
         orderBy: { [sortBy]: sortOrder },
@@ -58,11 +59,14 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Calculate total balance for each client
+    // Only use the latest unpaid/partial invoice's balanceDue as it already includes carried-forward balances
     const clientsWithBalance = clients.map((client) => {
-      const totalBalance = client.invoices.reduce(
-        (sum, inv) => sum + inv.balanceDue,
-        0
+      const unpaidInvoices = client.invoices.filter(
+        (inv) => inv.status === "UNPAID" || inv.status === "PARTIAL"
       );
+      // The latest unpaid invoice already includes all carried-forward balance
+      const totalBalance =
+        unpaidInvoices.length > 0 ? unpaidInvoices[0].balanceDue : 0;
       return {
         ...client,
         totalBalance,

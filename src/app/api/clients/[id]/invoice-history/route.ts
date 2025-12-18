@@ -42,6 +42,7 @@ export async function GET(
         invoiceNumber: invoice.invoiceNumber,
         itemsSubtotal,
         labourCost,
+        discount: invoice.discount || 0, // Include discount applied
         subtotal: invoice.subtotal,
         previousBalance: invoice.previousBalance,
         totalAmount: invoice.totalAmount,
