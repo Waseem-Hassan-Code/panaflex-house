@@ -138,6 +138,7 @@ model Invoice {
   
   // Status
   status          InvoiceStatus @default(UNPAID)
+  balancePaidFromFutureInvoice Boolean @default(false) // True if balance was paid from a later invoice
   
   notes           String?
   createdAt       DateTime @default(now())

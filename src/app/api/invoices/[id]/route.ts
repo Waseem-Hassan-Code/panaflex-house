@@ -16,6 +16,7 @@ export async function GET(
       include: {
         client: true,
         items: { orderBy: { sNo: "asc" } },
+        labourCosts: true,
         paymentsReceived: {
           include: {
             createdBy: { select: { id: true, name: true } },
@@ -32,6 +33,61 @@ export async function GET(
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // Recalculate balanceDue accounting for discount and labour cost
+    // IMPORTANT: Labour cost does NOT affect balance - it's just informational
+    // Only discount should be subtracted from the balance
+    // For existing invoices, if labour cost was incorrectly subtracted, we need to add it back
+    
+    // Calculate total labour cost from invoice labourCosts
+    const totalLabourCost = invoice.labourCosts?.reduce((sum, l) => sum + l.amount, 0) || 0;
+    
+    // Calculate items total from invoice items
+    const itemsTotal = invoice.items?.reduce((sum, item) => sum + item.amount, 0) || 0;
+    
+    // Check if labour cost was incorrectly subtracted from subtotal
+    // If subtotal + labourCost = itemsTotal, then labour was subtracted
+    const labourWasSubtracted = itemsTotal > 0 && Math.abs((invoice.subtotal + totalLabourCost) - itemsTotal) < 0.01;
+    
+    // Calculate correct subtotal (items total, labour cost NOT subtracted)
+    const correctSubtotal = labourWasSubtracted 
+      ? invoice.subtotal + totalLabourCost  // Add back labour cost if it was subtracted
+      : invoice.subtotal;  // Use as-is if labour wasn't subtracted
+    
+    // Calculate effective total: correctSubtotal + previousBalance - discount
+    const discountAmount = invoice.discount || 0;
+    const effectiveTotal = correctSubtotal + invoice.previousBalance - discountAmount;
+    const correctedBalanceDue = effectiveTotal - invoice.paidAmount;
+      
+      // If the calculated balance differs from stored balance, update it
+      if (Math.abs(correctedBalanceDue - invoice.balanceDue) > 0.01) {
+        // Update the invoice with corrected values
+        const updatedInvoice = await prisma.invoice.update({
+          where: { id },
+          data: {
+            totalAmount: effectiveTotal,
+            balanceDue: Math.max(0, correctedBalanceDue),
+            status: correctedBalanceDue <= 0 ? "PAID" : correctedBalanceDue < effectiveTotal ? "PARTIAL" : "UNPAID",
+          },
+          include: {
+            client: true,
+            items: { orderBy: { sNo: "asc" } },
+            paymentsReceived: {
+              include: {
+                createdBy: { select: { id: true, name: true } },
+              },
+              orderBy: { paymentDate: "desc" },
+            },
+            createdBy: { select: { id: true, name: true, email: true } },
+            updatedBy: { select: { id: true, name: true, email: true } },
+            previousInvoice: {
+              select: { id: true, invoiceNumber: true, balanceDue: true },
+            },
+          },
+        });
+        return NextResponse.json(updatedInvoice);
+      }
     }
 
     return NextResponse.json(invoice);

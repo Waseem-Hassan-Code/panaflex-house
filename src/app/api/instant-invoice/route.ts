@@ -74,7 +74,11 @@ export async function POST(request: NextRequest) {
           where: { id: existingClientId },
           include: {
             invoices: {
-              where: { status: { in: ["UNPAID", "PARTIAL"] } },
+              where: {
+                status: { in: ["UNPAID", "PARTIAL"] },
+                // Exclude invoices that were already paid from a future invoice
+                balancePaidFromFutureInvoice: { not: true },
+              },
               orderBy: { createdAt: "desc" },
             },
           },
@@ -150,11 +154,11 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Calculate previous balance from unpaid invoices
-      const previousBalance = client.invoices.reduce(
-        (sum, inv) => sum + inv.balanceDue,
-        0
-      );
+      // Calculate previous balance - only use the latest unpaid invoice's balanceDue
+      // because it already includes all previous balances that were carried forward
+      // This prevents double-counting when previous invoices had their balance carried forward
+      const latestUnpaidInvoice = client.invoices[0] || null;
+      const previousBalance = latestUnpaidInvoice?.balanceDue || 0;
 
       // Get client's credit balance (overpayment from previous invoices)
       const clientCreditBalance = client.creditBalance || 0;
@@ -165,7 +169,7 @@ export async function POST(request: NextRequest) {
         (!client.membershipEndDate ||
           new Date(client.membershipEndDate) >= new Date());
 
-      const previousInvoice = client.invoices[0] || null;
+      const previousInvoice = latestUnpaidInvoice;
       const invoiceNumber = await getNextSequence("INVOICE");
 
       // Process items
@@ -192,7 +196,7 @@ export async function POST(request: NextRequest) {
         0
       );
 
-      // Calculate total labour costs (to be subtracted from invoice total)
+      // Calculate total labour costs (informational only - NOT subtracted from balance)
       const validLabourCosts = (labourCosts || []).filter(
         (l: LabourCostInput) => l.description && l.amount > 0
       );
@@ -201,22 +205,23 @@ export async function POST(request: NextRequest) {
         0
       );
 
-      // Subtotal = Items total - Labour costs (labour is deducted)
-      const subtotalAfterLabour = itemsSubtotal - totalLabourCost;
+      // Subtotal = Items total (labour cost is NOT deducted - it's just for tracking)
+      // Labour cost is paid by the business owner out of the money received, so it doesn't affect client balance
+      const subtotalForCalculation = itemsSubtotal;
 
       // Apply manual discount if provided
       let manualDiscountAmount = 0;
       if (discount && discount.value > 0) {
         if (discount.type === "percentage") {
           manualDiscountAmount = Math.round(
-            (subtotalAfterLabour * discount.value) / 100
+            (subtotalForCalculation * discount.value) / 100
           );
         } else {
-          manualDiscountAmount = Math.min(discount.value, subtotalAfterLabour);
+          manualDiscountAmount = Math.min(discount.value, subtotalForCalculation);
         }
       }
 
-      const subtotalBeforeDiscount = subtotalAfterLabour - manualDiscountAmount;
+      const subtotalBeforeDiscount = subtotalForCalculation - manualDiscountAmount;
 
       // Apply membership discount if valid
       let membershipDiscount = 0;
@@ -274,7 +279,7 @@ export async function POST(request: NextRequest) {
           subtotal,
           discount: manualDiscountAmount + membershipDiscount, // Store total discount applied
           previousBalance,
-          totalAmount: subtotal + previousBalance,
+          totalAmount,
           balanceDue: totalAmount,
           paidAmount: creditUsed,
           status: totalAmount <= 0 ? "PAID" : "UNPAID",
@@ -361,6 +366,101 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // If invoice is now fully paid, handle cascading updates
+        if (newStatus === "PAID") {
+          // 1. Mark all previous invoices (whose balance was carried forward) as paid from future invoice
+          if (previousBalance > 0) {
+            // Find all previous invoices by following the previousInvoiceId chain backwards
+            const previousInvoices: string[] = [];
+            let currentInvoiceId: string | null = invoice.id;
+            
+            while (currentInvoiceId) {
+              const currentInv = await tx.invoice.findUnique({
+                where: { id: currentInvoiceId },
+                select: { previousInvoiceId: true },
+              });
+              
+              if (currentInv?.previousInvoiceId) {
+                previousInvoices.push(currentInv.previousInvoiceId);
+                currentInvoiceId = currentInv.previousInvoiceId;
+              } else {
+                break;
+              }
+            }
+            
+            // Mark all previous invoices as having their balance paid from future invoice
+            if (previousInvoices.length > 0) {
+              try {
+                await tx.invoice.updateMany({
+                  where: {
+                    id: { in: previousInvoices },
+                  },
+                  data: {
+                    balancePaidFromFutureInvoice: true,
+                  },
+                });
+              } catch (fieldError) {
+                console.warn(
+                  "Could not update balancePaidFromFutureInvoice field:",
+                  fieldError
+                );
+              }
+            }
+          }
+
+          // 2. Update all subsequent invoices that included this invoice's balance
+          // (This would be rare at invoice creation, but handle it for completeness)
+          const subsequentInvoices = await tx.invoice.findMany({
+            where: {
+              previousInvoiceId: invoice.id,
+              status: { not: "CANCELLED" },
+            },
+            select: {
+              id: true,
+              previousBalance: true,
+              subtotal: true,
+              totalAmount: true,
+              paidAmount: true,
+              balanceDue: true,
+            },
+          });
+
+          const originalBalanceDue = totalAmount; // At creation, this is the full amount
+          
+          for (const subsequentInv of subsequentInvoices) {
+            const amountToReduce = Math.min(
+              subsequentInv.previousBalance,
+              originalBalanceDue
+            );
+
+            if (amountToReduce > 0) {
+              const newPreviousBalance = Math.max(
+                0,
+                subsequentInv.previousBalance - amountToReduce
+              );
+              const newTotalAmount =
+                subsequentInv.subtotal + newPreviousBalance;
+              const newBalanceDue = Math.max(
+                0,
+                newTotalAmount - subsequentInv.paidAmount
+              );
+              const newSubsequentStatus =
+                newBalanceDue <= 0 ? "PAID" : newBalanceDue < newTotalAmount ? "PARTIAL" : "UNPAID";
+
+              await tx.invoice.update({
+                where: { id: subsequentInv.id },
+                data: {
+                  previousBalance: newPreviousBalance,
+                  totalAmount: newTotalAmount,
+                  balanceDue: newBalanceDue,
+                  status: newSubsequentStatus,
+                  updatedById: session.user.id,
+                },
+              });
+            }
+          }
+        }
+
         // If there's overpayment, add to client's credit balance
         if (overpaymentToCredit > 0) {
           await tx.client.update({
@@ -411,7 +511,7 @@ export async function POST(request: NextRequest) {
             subtotal,
             previousBalance,
             creditUsed,
-            totalAmount: subtotal + previousBalance,
+            totalAmount,
             paidAmount: finalPaidAmount,
             balanceDue: finalBalanceDue,
             itemCount: items.length,
@@ -439,7 +539,7 @@ export async function POST(request: NextRequest) {
         subtotal,
         previousBalance,
         creditUsed,
-        totalAmount: subtotal + previousBalance,
+            totalAmount,
         paidAmount: finalPaidAmount,
         balanceDue: finalBalanceDue,
         isNewClient,

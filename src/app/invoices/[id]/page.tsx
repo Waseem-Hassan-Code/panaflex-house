@@ -127,7 +127,11 @@ export default function InvoiceDetailPage({
             {new Date(invoice.invoiceDate).toLocaleDateString()}
           </Typography>
         </Box>
-        <StatusBadge status={invoice.status} size="medium" />
+        <StatusBadge
+          status={invoice.status}
+          size="medium"
+          balancePaidFromFutureInvoice={invoice.balancePaidFromFutureInvoice}
+        />
         <Button
           variant="outlined"
           startIcon={<PrintIcon />}
@@ -135,16 +139,18 @@ export default function InvoiceDetailPage({
         >
           Print
         </Button>
-        {invoice.status !== "PAID" && invoice.status !== "CANCELLED" && (
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<PaymentIcon />}
-            onClick={() => setShowPaymentDialog(true)}
-          >
-            Receive Payment
-          </Button>
-        )}
+        {invoice.status !== "PAID" &&
+          invoice.status !== "CANCELLED" &&
+          !invoice.balancePaidFromFutureInvoice && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<PaymentIcon />}
+              onClick={() => setShowPaymentDialog(true)}
+            >
+              Receive Payment
+            </Button>
+          )}
       </Box>
 
       {/* Invoice Content */}

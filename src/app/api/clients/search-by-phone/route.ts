@@ -2,28 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPhoneSearchVariants } from "@/lib/phoneUtils";
 
-// Search client by phone number
+// Search client by phone number or client ID
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const phone = searchParams.get("phone");
+    const clientId = searchParams.get("clientId");
 
-    if (!phone) {
+    if (!phone && !clientId) {
       return NextResponse.json(
-        { error: "Phone number is required" },
+        { error: "Phone number or Client ID is required" },
         { status: 400 }
       );
     }
 
-    // Get all phone format variants for searching
-    const phoneVariants = getPhoneSearchVariants(phone);
+    // Build search conditions
+    const searchConditions: any[] = [];
 
-    // Search for client with any phone format variant
+    // Search by phone if provided
+    if (phone) {
+      const phoneVariants = getPhoneSearchVariants(phone);
+      searchConditions.push(
+        ...phoneVariants.map((variant) => ({
+          phone: { contains: variant, mode: "insensitive" as const },
+        }))
+      );
+    }
+
+    // Search by client ID if provided
+    if (clientId) {
+      searchConditions.push({
+        clientId: { contains: clientId, mode: "insensitive" as const },
+      });
+    }
+
+    // Search for client with phone or client ID
     const client = await prisma.client.findFirst({
       where: {
-        OR: phoneVariants.map((variant) => ({
-          phone: { contains: variant, mode: "insensitive" as const },
-        })),
+        OR: searchConditions,
         isActive: true,
       },
       include: {

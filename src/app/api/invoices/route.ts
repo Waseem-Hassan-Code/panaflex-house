@@ -97,7 +97,11 @@ export async function POST(request: NextRequest) {
       where: { id: clientId },
       include: {
         invoices: {
-          where: { status: { in: ["UNPAID", "PARTIAL"] } },
+          where: {
+            status: { in: ["UNPAID", "PARTIAL"] },
+            // Exclude invoices that were already paid from a future invoice
+            balancePaidFromFutureInvoice: { not: true },
+          },
           orderBy: { createdAt: "desc" },
         },
       },
@@ -107,14 +111,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Calculate previous balance from unpaid invoices
-    const previousBalance = client.invoices.reduce(
-      (sum, inv) => sum + inv.balanceDue,
-      0
-    );
+    // Calculate previous balance - only use the latest unpaid invoice's balanceDue
+    // that hasn't been paid from a future invoice
+    // This prevents including balances from invoices that were already paid
+    const latestUnpaidInvoice = client.invoices[0] || null;
+    const previousBalance = latestUnpaidInvoice?.balanceDue || 0;
 
     // Get the last unpaid invoice for reference
-    const previousInvoice = client.invoices[0] || null;
+    const previousInvoice = latestUnpaidInvoice;
 
     // Generate invoice number
     const invoiceNumber = await getNextSequence("INVOICE");

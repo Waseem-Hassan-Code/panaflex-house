@@ -49,12 +49,8 @@ export default function ReceivePaymentDialog({
       return;
     }
 
-    if (paymentAmount > invoice.balanceDue) {
-      setError(
-        `Amount cannot exceed balance due (Rs. ${invoice.balanceDue.toLocaleString()})`
-      );
-      return;
-    }
+    // Allow overpayments - they will be added to client's credit balance
+    // Removed validation that prevented overpayments
 
     setLoading(true);
     setError(null);
@@ -149,7 +145,7 @@ export default function ReceivePaymentDialog({
             InputProps={{
               startAdornment: <Typography sx={{ mr: 1 }}>Rs.</Typography>,
             }}
-            helperText={`Max: Rs. ${invoice.balanceDue.toLocaleString()}`}
+            helperText={`Balance: Rs. ${invoice.balanceDue.toLocaleString()} (overpayments will be added to credit balance)`}
           />
 
           <TextField

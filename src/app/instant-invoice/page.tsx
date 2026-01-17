@@ -141,6 +141,7 @@ export default function InstantInvoicePage() {
   // Client fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [clientId, setClientId] = useState("");
   const [searchingClient, setSearchingClient] = useState(false);
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [isNewClient, setIsNewClient] = useState(false);
@@ -176,31 +177,49 @@ export default function InstantInvoicePage() {
   const printRef = useRef<HTMLDivElement>(null);
   const historyPrintRef = useRef<HTMLDivElement>(null);
 
-  // Search client by phone number
-  const searchClientByPhone = useCallback(async (phoneNumber: string) => {
-    if (phoneNumber.length < 7) {
+  // Search client by phone number or client ID
+  const searchClient = useCallback(async (phoneNumber: string, clientIdValue: string) => {
+    // Only search if we have at least 7 characters for phone or 3 characters for client ID
+    const hasValidPhone = phoneNumber.length >= 7;
+    const hasValidClientId = clientIdValue.length >= 3;
+
+    if (!hasValidPhone && !hasValidClientId) {
       setClientData(null);
       setIsNewClient(false);
-      if (phoneNumber.length === 0) {
-        setName(""); // Reset name when phone is cleared
+      if (phoneNumber.length === 0 && clientIdValue.length === 0) {
+        setName(""); // Reset name when both fields are cleared
       }
       return;
     }
 
     setSearchingClient(true);
     try {
+      const params = new URLSearchParams();
+      if (hasValidPhone) {
+        params.append("phone", phoneNumber);
+      }
+      if (hasValidClientId) {
+        params.append("clientId", clientIdValue);
+      }
+
       const response = await fetch(
-        `/api/clients/search-by-phone?phone=${encodeURIComponent(phoneNumber)}`
+        `/api/clients/search-by-phone?${params.toString()}`
       );
       const data = await response.json();
 
       if (data.found) {
         setClientData(data.client);
         setName(data.client.name);
+        // Always update both fields with found client's data for consistency
+        setPhone(data.client.phone);
+        setClientId(data.client.clientId);
         setIsNewClient(false);
       } else {
         setClientData(null);
-        setName(""); // Reset name when client not found
+        // Only clear name if both search fields are empty
+        if (phoneNumber.length === 0 && clientIdValue.length === 0) {
+          setName("");
+        }
         setIsNewClient(true);
       }
     } catch (error) {
@@ -210,16 +229,14 @@ export default function InstantInvoicePage() {
     }
   }, []);
 
-  // Debounced phone search
+  // Debounced search for both phone and client ID
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (phone) {
-        searchClientByPhone(phone);
-      }
+      searchClient(phone, clientId);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [phone, searchClientByPhone]);
+  }, [phone, clientId, searchClient]);
 
   // Load invoice history for client
   const loadInvoiceHistory = async () => {
@@ -419,6 +436,7 @@ export default function InstantInvoicePage() {
       setNotes("");
       setName("");
       setPhone("");
+      setClientId("");
       setPaidAmount(0);
       setPaymentMethod("CASH");
       setDiscountType("amount");
@@ -670,7 +688,7 @@ export default function InstantInvoicePage() {
               Bill To
             </Typography>
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 4 }}>
+              <Grid size={{ xs: 12, md: 3 }}>
                 <TextField
                   fullWidth
                   label="Phone Number"
@@ -696,7 +714,31 @@ export default function InstantInvoicePage() {
                   }}
                 />
               </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Client ID"
+                  value={clientId}
+                  onChange={(e) => {
+                    setClientId(e.target.value.toUpperCase());
+                  }}
+                  placeholder="CLIENT_001"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: "text.secondary" }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchingClient ? (
+                      <InputAdornment position="end">
+                        <CircularProgress size={20} />
+                      </InputAdornment>
+                    ) : null,
+                  }}
+                  helperText="Enter phone or Client ID to search"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   label="Name"
@@ -1138,10 +1180,16 @@ export default function InstantInvoicePage() {
                     placeholder={
                       discountType === "percentage" ? "Enter %" : "Enter Amount"
                     }
-                    value={discountValue || ""}
-                    onChange={(e) =>
-                      setDiscountValue(parseFloat(e.target.value) || 0)
-                    }
+                    value={discountValue === 0 ? "" : discountValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "" || val === null) {
+                        setDiscountValue(0);
+                      } else {
+                        const parsed = parseFloat(val);
+                        setDiscountValue(isNaN(parsed) ? 0 : parsed);
+                      }
+                    }}
                     sx={{ flex: 1 }}
                     InputProps={{
                       startAdornment: (
@@ -1153,6 +1201,7 @@ export default function InstantInvoicePage() {
                     inputProps={{
                       min: 0,
                       max: discountType === "percentage" ? 100 : undefined,
+                      step: "any",
                     }}
                   />
                   {discountValue > 0 && (
@@ -1355,10 +1404,16 @@ export default function InstantInvoicePage() {
                       size="small"
                       label="Amount"
                       type="number"
-                      value={paidAmount || ""}
-                      onChange={(e) =>
-                        setPaidAmount(parseFloat(e.target.value) || 0)
-                      }
+                      value={paidAmount === 0 ? "" : paidAmount}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "" || val === null) {
+                          setPaidAmount(0);
+                        } else {
+                          const parsed = parseFloat(val);
+                          setPaidAmount(isNaN(parsed) ? 0 : parsed);
+                        }
+                      }}
                       sx={{ flex: 1 }}
                       InputProps={{
                         startAdornment: (

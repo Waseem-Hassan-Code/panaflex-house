@@ -96,6 +96,7 @@ export interface Invoice {
   paidAmount: number;
   balanceDue: number;
   status: InvoiceStatus;
+  balancePaidFromFutureInvoice?: boolean; // True if balance was paid from a later invoice
   notes?: string | null;
   createdAt: Date;
   updatedAt: Date;

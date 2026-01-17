@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, CircularProgress } from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
@@ -21,8 +21,16 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const pathname = usePathname();
   const dispatch = useAppDispatch();
   const { sidebarOpen } = useAppSelector((state) => state.ui);
+  const [mounted, setMounted] = useState(false);
+
+  // Track if component is mounted to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
+    // Only redirect if component is mounted and unauthenticated
+    // We check mounted in the render, so this effect only runs when status changes
     if (status === "unauthenticated") {
       router.replace("/login");
     }
@@ -42,7 +50,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
     }
   }, [session, dispatch]);
 
-  if (status === "loading") {
+  // Show loading state during initial mount or when session is loading
+  // This prevents hydration mismatch by ensuring consistent rendering
+  if (!mounted || status === "loading") {
     return (
       <Box
         sx={{
@@ -52,6 +62,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           height: "100vh",
           backgroundColor: "#f5f7fa",
         }}
+        suppressHydrationWarning
       >
         <CircularProgress size={50} sx={{ color: "#1a237e" }} />
       </Box>

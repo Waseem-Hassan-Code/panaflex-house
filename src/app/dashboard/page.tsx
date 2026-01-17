@@ -373,7 +373,12 @@ export default function DashboardPage() {
                             Rs. {invoice.totalAmount.toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <StatusBadge status={invoice.status} />
+                            <StatusBadge
+                              status={invoice.status}
+                              balancePaidFromFutureInvoice={
+                                invoice.balancePaidFromFutureInvoice
+                              }
+                            />
                           </TableCell>
                         </TableRow>
                       ))}

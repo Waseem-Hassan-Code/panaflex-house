@@ -132,7 +132,12 @@ export default function InvoicesPage() {
       id: "status",
       label: "Status",
       minWidth: 100,
-      format: (value) => <StatusBadge status={value as string} />,
+      format: (value, row) => (
+        <StatusBadge
+          status={value as string}
+          balancePaidFromFutureInvoice={row.balancePaidFromFutureInvoice}
+        />
+      ),
     },
     {
       id: "createdBy.name",

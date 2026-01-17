@@ -520,7 +520,12 @@ export default function ClientDetailPage({
                         Rs. {invoice.balanceDue.toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={invoice.status} />
+                        <StatusBadge
+                          status={invoice.status}
+                          balancePaidFromFutureInvoice={
+                            invoice.balancePaidFromFutureInvoice
+                          }
+                        />
                       </TableCell>
                       <TableCell align="center">
                         <Box
@@ -541,7 +546,8 @@ export default function ClientDetailPage({
                             </IconButton>
                           </Tooltip>
                           {invoice.status !== "PAID" &&
-                            invoice.status !== "CANCELLED" && (
+                            invoice.status !== "CANCELLED" &&
+                            !invoice.balancePaidFromFutureInvoice && (
                               <Tooltip title="Receive Payment">
                                 <IconButton
                                   size="small"
