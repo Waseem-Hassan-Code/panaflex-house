@@ -102,86 +102,197 @@ export async function POST(request: NextRequest) {
     const { clientId, invoiceId, amount, paymentMethod, reference, notes } =
       body;
 
-    if (!clientId || !invoiceId || !amount || amount <= 0) {
+    if (!clientId || !amount || amount <= 0) {
       return NextResponse.json(
-        { error: "Client ID, Invoice ID and valid amount are required" },
+        { error: "Client ID and valid amount are required" },
         { status: 400 }
       );
     }
 
-    // Get the invoice
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId },
+    // Verify client exists
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
       select: {
         id: true,
-        invoiceNumber: true,
-        clientId: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        subtotal: true,
-        discount: true,
-        totalAmount: true,
-        paidAmount: true,
-        balanceDue: true,
-        status: true,
-        previousBalance: true,
-        previousInvoiceId: true,
+        name: true,
+        creditBalance: true,
       },
     });
 
-    if (!invoice) {
-      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    if (invoice.clientId !== clientId) {
-      return NextResponse.json(
-        { error: "Invoice does not belong to this client" },
-        { status: 400 }
-      );
-    }
+    // If invoiceId is provided, validate it (optional - for backward compatibility)
+    if (invoiceId) {
+      const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { clientId: true, status: true },
+      });
 
-    if (invoice.status === "PAID") {
-      return NextResponse.json(
-        { error: "Invoice is already fully paid" },
-        { status: 400 }
-      );
-    }
+      if (!invoice) {
+        return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+      }
 
-    if (invoice.status === "CANCELLED") {
-      return NextResponse.json(
-        { error: "Cannot receive payment for cancelled invoice" },
-        { status: 400 }
-      );
-    }
+      if (invoice.clientId !== clientId) {
+        return NextResponse.json(
+          { error: "Invoice does not belong to this client" },
+          { status: 400 }
+        );
+      }
 
-    // Calculate overpayment (extra amount beyond invoice balance)
-    const overpayment = Math.max(0, amount - invoice.balanceDue);
-    const actualPaymentForInvoice = amount - overpayment;
+      if (invoice.status === "CANCELLED") {
+        return NextResponse.json(
+          { error: "Cannot receive payment for cancelled invoice" },
+          { status: 400 }
+        );
+      }
+    }
 
     // Generate receipt number
     const receiptNumber = await getNextSequence("RECEIPT");
 
     // Create payment within transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create payment record
+      // FIFO Payment Allocation Logic
+      // 1. Get all unpaid invoices for this client, sorted by invoiceDate (oldest first)
+      const unpaidInvoices = await tx.invoice.findMany({
+        where: {
+          clientId,
+          status: { not: "CANCELLED" },
+          balanceDue: { gt: 0 },
+          balancePaidFromFutureInvoice: { not: true }, // Exclude invoices already paid from future invoices
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          invoiceDate: true,
+          subtotal: true,
+          discount: true,
+          previousBalance: true,
+          totalAmount: true,
+          paidAmount: true,
+          balanceDue: true,
+          status: true,
+        },
+        orderBy: {
+          invoiceDate: "asc", // FIFO: oldest first
+        },
+      });
+
+      if (unpaidInvoices.length === 0) {
+        // No unpaid invoices - add entire payment to credit balance
+        await tx.client.update({
+          where: { id: clientId },
+          data: {
+            creditBalance: (client.creditBalance || 0) + amount,
+            updatedById: session.user.id,
+          },
+        });
+
+        // Create payment record (no invoiceId, no allocations)
+        const payment = await tx.paymentReceived.create({
+          data: {
+            receiptNumber,
+            clientId,
+            invoiceId: null, // No specific invoice
+            amount,
+            paymentMethod: paymentMethod || "CASH",
+            reference,
+            notes: notes || "Payment received - no outstanding invoices",
+            createdById: session.user.id,
+          },
+          include: {
+            client: {
+              select: {
+                id: true,
+                clientId: true,
+                name: true,
+                creditBalance: true,
+              },
+            },
+            createdBy: { select: { id: true, name: true } },
+          },
+        });
+
+        return {
+          payment,
+          allocations: [],
+          totalAllocated: 0,
+          creditAdded: amount,
+        };
+      }
+
+      // 2. Allocate payment FIFO style
+      let remainingPayment = amount;
+      const allocations: Array<{
+        invoiceId: string;
+        invoiceNumber: string;
+        amountApplied: number;
+        previousBalance: number;
+        newBalance: number;
+        newStatus: string;
+      }> = [];
+
+      for (const invoice of unpaidInvoices) {
+        if (remainingPayment <= 0) break;
+
+        // Calculate effective total (subtotal + previousBalance - discount)
+        const discountAmount = invoice.discount || 0;
+        const baseTotal = invoice.subtotal + invoice.previousBalance;
+        const effectiveTotal = baseTotal - discountAmount;
+        const currentBalanceDue = effectiveTotal - invoice.paidAmount;
+
+        if (currentBalanceDue <= 0) continue; // Skip if already paid
+
+        // Amount to apply to this invoice
+        const amountToApply = Math.min(remainingPayment, currentBalanceDue);
+
+        // Update invoice
+        const newPaidAmount = invoice.paidAmount + amountToApply;
+        const newBalanceDue = Math.max(0, effectiveTotal - newPaidAmount);
+        let newStatus: "PAID" | "PARTIAL" | "UNPAID";
+        if (newBalanceDue <= 0) {
+          newStatus = "PAID";
+        } else if (newBalanceDue < effectiveTotal) {
+          newStatus = "PARTIAL";
+        } else {
+          newStatus = "UNPAID";
+        }
+
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            totalAmount: effectiveTotal,
+            paidAmount: newPaidAmount,
+            balanceDue: newBalanceDue,
+            status: newStatus,
+            updatedById: session.user.id,
+          },
+        });
+
+        allocations.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          amountApplied: amountToApply,
+          previousBalance: currentBalanceDue,
+          newBalance: newBalanceDue,
+          newStatus,
+        });
+
+        remainingPayment -= amountToApply;
+      }
+
+      // 3. Create payment record
       const payment = await tx.paymentReceived.create({
         data: {
           receiptNumber,
           clientId,
-          invoiceId,
+          invoiceId: invoiceId || null, // Optional: primary invoice if specified
           amount,
           paymentMethod: paymentMethod || "CASH",
           reference,
-          notes:
-            overpayment > 0
-              ? `${
-                  notes || ""
-                } [Overpayment of Rs. ${overpayment} added to credit balance]`.trim()
-              : notes,
+          notes: notes || "",
           createdById: session.user.id,
         },
         include: {
@@ -193,165 +304,121 @@ export async function POST(request: NextRequest) {
               creditBalance: true,
             },
           },
-          invoice: { select: { id: true, invoiceNumber: true } },
           createdBy: { select: { id: true, name: true } },
         },
       });
 
-      // Update invoice
-      // Recalculate balanceDue accounting for discount
-      // IMPORTANT: Labour cost does NOT affect balance - it's just informational
-      // Only discount should be subtracted from the balance
-      // Formula: effectiveTotal = (subtotal + previousBalance) - discount
-      // Then: balanceDue = effectiveTotal - paidAmount
-      const newPaidAmount = invoice.paidAmount + actualPaymentForInvoice;
-      const discountAmount = invoice.discount || 0;
-      
-      // Calculate effective total by subtracting discount only
-      // Note: subtotal should already be items total (labour cost not subtracted)
-      // If labour cost was incorrectly subtracted, we need to add it back
-      // But for now, we'll assume subtotal is correct and just subtract discount
-      const baseTotal = invoice.subtotal + invoice.previousBalance;
-      const effectiveTotal = baseTotal - discountAmount;
-      
-      // Calculate balance due with discount applied
-      const newBalanceDue = effectiveTotal - newPaidAmount;
-      const newStatus = newBalanceDue <= 0 ? "PAID" : "PARTIAL";
-      
-      // Update totalAmount to reflect the discount if it wasn't already applied
-      const correctedTotalAmount = effectiveTotal;
-
-      await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          totalAmount: correctedTotalAmount, // Update totalAmount to account for discount
-          paidAmount: newPaidAmount,
-          balanceDue: Math.max(0, newBalanceDue),
-          status: newStatus,
-          updatedById: session.user.id,
-        },
-      });
-
-      // If invoice is now fully paid, handle cascading updates
-      if (newStatus === "PAID") {
-        // 1. Mark all previous invoices (whose balance was carried forward) as paid from future invoice
-        if (invoice.previousBalance > 0) {
-          // Find all previous invoices by following the previousInvoiceId chain backwards
-          const previousInvoices: string[] = [];
-          let currentInvoiceId: string | null = invoiceId;
-          
-          while (currentInvoiceId) {
-            const currentInv = await tx.invoice.findUnique({
-              where: { id: currentInvoiceId },
-              select: { previousInvoiceId: true },
-            });
-            
-            if (currentInv?.previousInvoiceId) {
-              previousInvoices.push(currentInv.previousInvoiceId);
-              currentInvoiceId = currentInv.previousInvoiceId;
-            } else {
-              break;
-            }
-          }
-          
-          // Mark all previous invoices as having their balance paid from future invoice
-          if (previousInvoices.length > 0) {
-            try {
-              await tx.invoice.updateMany({
-                where: {
-                  id: { in: previousInvoices },
-                },
-                data: {
-                  balancePaidFromFutureInvoice: true,
-                },
-              });
-            } catch (fieldError) {
-              // If balancePaidFromFutureInvoice field doesn't exist yet, log but don't fail
-              console.warn(
-                "Could not update balancePaidFromFutureInvoice field:",
-                fieldError
-              );
-            }
-          }
-        }
-
-        // 2. Update all subsequent invoices that included this invoice's balance
-        // Find all invoices that have this invoice as their previousInvoice
-        const subsequentInvoices = await tx.invoice.findMany({
-          where: {
-            previousInvoiceId: invoiceId,
-            status: { not: "CANCELLED" },
-          },
-          select: {
-            id: true,
-            previousBalance: true,
-            subtotal: true,
-            totalAmount: true,
-            paidAmount: true,
-            balanceDue: true,
+      // 4. Create payment allocations
+      const totalAllocated = allocations.reduce((sum, a) => sum + a.amountApplied, 0);
+      for (const allocation of allocations) {
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: payment.id,
+            invoiceId: allocation.invoiceId,
+            amountApplied: allocation.amountApplied,
           },
         });
-
-        // For each subsequent invoice, reduce previousBalance by the amount that was carried forward from this invoice
-        // Since this invoice was the previousInvoice, the subsequent invoice's previousBalance
-        // includes this invoice's balanceDue at the time the subsequent invoice was created
-        // We reduce by the original balanceDue that was carried forward (which equals this invoice's balanceDue before payment)
-        const originalBalanceDue = invoice.balanceDue + actualPaymentForInvoice;
-        
-        for (const subsequentInv of subsequentInvoices) {
-          // The amount to reduce is the minimum of:
-          // - The subsequent invoice's previousBalance (can't reduce more than what's there)
-          // - The original balanceDue from this invoice (the amount that was carried forward)
-          const amountToReduce = Math.min(
-            subsequentInv.previousBalance,
-            originalBalanceDue
-          );
-
-          if (amountToReduce > 0) {
-            const newPreviousBalance = Math.max(
-              0,
-              subsequentInv.previousBalance - amountToReduce
-            );
-            const newTotalAmount =
-              subsequentInv.subtotal + newPreviousBalance;
-            const newBalanceDue = Math.max(
-              0,
-              newTotalAmount - subsequentInv.paidAmount
-            );
-            const newSubsequentStatus =
-              newBalanceDue <= 0 ? "PAID" : newBalanceDue < newTotalAmount ? "PARTIAL" : "UNPAID";
-
-            await tx.invoice.update({
-              where: { id: subsequentInv.id },
-              data: {
-                previousBalance: newPreviousBalance,
-                totalAmount: newTotalAmount,
-                balanceDue: newBalanceDue,
-                status: newSubsequentStatus,
-                updatedById: session.user.id,
-              },
-            });
-          }
-        }
       }
 
-      // If there's overpayment, add to client's credit balance
-      if (overpayment > 0) {
-        const client = await tx.client.findUnique({
-          where: { id: clientId },
-          select: { creditBalance: true },
-        });
-
+      // 5. Handle overpayment (add to credit balance)
+      if (remainingPayment > 0) {
         await tx.client.update({
           where: { id: clientId },
           data: {
-            creditBalance: (client?.creditBalance || 0) + overpayment,
+            creditBalance: (client.creditBalance || 0) + remainingPayment,
             updatedById: session.user.id,
           },
         });
       }
 
-      // Create transaction log
+      // 6. Handle cascading updates for fully paid invoices
+      for (const allocation of allocations) {
+        if (allocation.newStatus === "PAID") {
+          // Mark previous invoices as paid from future invoice
+          const invoice = await tx.invoice.findUnique({
+            where: { id: allocation.invoiceId },
+            select: { previousBalance: true },
+          });
+
+          if (invoice && invoice.previousBalance > 0) {
+            // Find invoices that had their balance carried forward to this invoice
+            const carryForwardRecords = await tx.invoiceCarryForward.findMany({
+              where: { nextInvoiceId: allocation.invoiceId },
+              select: { previousInvoiceId: true },
+            });
+
+            if (carryForwardRecords.length > 0) {
+              const previousInvoiceIds = carryForwardRecords.map(
+                (r) => r.previousInvoiceId
+              );
+              await tx.invoice.updateMany({
+                where: {
+                  id: { in: previousInvoiceIds },
+                },
+                data: {
+                  balancePaidFromFutureInvoice: true,
+                },
+              });
+            }
+          }
+
+          // Update subsequent invoices that carried forward this invoice's balance
+          const subsequentInvoices = await tx.invoice.findMany({
+            where: {
+              previousInvoiceId: allocation.invoiceId,
+              status: { not: "CANCELLED" },
+            },
+            select: {
+              id: true,
+              previousBalance: true,
+              subtotal: true,
+              paidAmount: true,
+            },
+          });
+
+          for (const subsequentInv of subsequentInvoices) {
+            // Reduce previousBalance by the amount that was carried forward
+            const originalBalance = allocation.previousBalance;
+            const amountToReduce = Math.min(
+              subsequentInv.previousBalance,
+              originalBalance
+            );
+
+            if (amountToReduce > 0) {
+              const newPreviousBalance = Math.max(
+                0,
+                subsequentInv.previousBalance - amountToReduce
+              );
+              const discountAmount = 0; // Get from invoice if needed
+              const newTotalAmount = subsequentInv.subtotal + newPreviousBalance;
+              const newBalanceDue = Math.max(
+                0,
+                newTotalAmount - subsequentInv.paidAmount
+              );
+              const newSubsequentStatus =
+                newBalanceDue <= 0
+                  ? "PAID"
+                  : newBalanceDue < newTotalAmount
+                  ? "PARTIAL"
+                  : "UNPAID";
+
+              await tx.invoice.update({
+                where: { id: subsequentInv.id },
+                data: {
+                  previousBalance: newPreviousBalance,
+                  totalAmount: newTotalAmount,
+                  balanceDue: newBalanceDue,
+                  status: newSubsequentStatus,
+                  updatedById: session.user.id,
+                },
+              });
+            }
+          }
+        }
+      }
+
+
+      // 7. Create transaction log
       await tx.transactionLog.create({
         data: {
           entityType: "PAYMENT",
@@ -360,22 +427,25 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           details: {
             receiptNumber: payment.receiptNumber,
-            invoiceNumber: invoice.invoiceNumber,
-            clientName: invoice.client.name,
+            clientName: client.name,
             amount: payment.amount,
-            appliedToInvoice: actualPaymentForInvoice,
-            overpayment: overpayment,
+            totalAllocated: totalAllocated,
+            creditAdded: remainingPayment,
+            allocations: allocations.map((a) => ({
+              invoiceNumber: a.invoiceNumber,
+              amountApplied: a.amountApplied,
+              newStatus: a.newStatus,
+            })),
             paymentMethod: payment.paymentMethod,
-            newInvoiceStatus: newStatus,
-            remainingBalance: Math.max(0, newBalanceDue),
           },
         },
       });
 
       return {
-        ...payment,
-        overpayment,
-        appliedToInvoice: actualPaymentForInvoice,
+        payment,
+        allocations,
+        totalAllocated,
+        creditAdded: remainingPayment,
       };
     });
 

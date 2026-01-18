@@ -155,9 +155,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Calculate previous balance - only use the latest unpaid invoice's balanceDue
-      // because it already includes all previous balances that were carried forward
-      // This prevents double-counting when previous invoices had their balance carried forward
-      const latestUnpaidInvoice = client.invoices[0] || null;
+      // that hasn't been paid from a future invoice
+      // This prevents including balances from invoices that were already paid
+      const latestUnpaidInvoice = client.invoices.find(
+        (inv) =>
+          inv.status !== "PAID" &&
+          inv.status !== "CANCELLED" &&
+          inv.balanceDue > 0 &&
+          !inv.balancePaidFromFutureInvoice
+      ) || null;
       const previousBalance = latestUnpaidInvoice?.balanceDue || 0;
 
       // Get client's credit balance (overpayment from previous invoices)

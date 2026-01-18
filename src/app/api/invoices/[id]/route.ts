@@ -59,35 +59,43 @@ export async function GET(
     const discountAmount = invoice.discount || 0;
     const effectiveTotal = correctSubtotal + invoice.previousBalance - discountAmount;
     const correctedBalanceDue = effectiveTotal - invoice.paidAmount;
-      
-      // If the calculated balance differs from stored balance, update it
-      if (Math.abs(correctedBalanceDue - invoice.balanceDue) > 0.01) {
-        // Update the invoice with corrected values
-        const updatedInvoice = await prisma.invoice.update({
-          where: { id },
-          data: {
-            totalAmount: effectiveTotal,
-            balanceDue: Math.max(0, correctedBalanceDue),
-            status: correctedBalanceDue <= 0 ? "PAID" : correctedBalanceDue < effectiveTotal ? "PARTIAL" : "UNPAID",
-          },
-          include: {
-            client: true,
-            items: { orderBy: { sNo: "asc" } },
-            paymentsReceived: {
-              include: {
-                createdBy: { select: { id: true, name: true } },
-              },
-              orderBy: { paymentDate: "desc" },
-            },
-            createdBy: { select: { id: true, name: true, email: true } },
-            updatedBy: { select: { id: true, name: true, email: true } },
-            previousInvoice: {
-              select: { id: true, invoiceNumber: true, balanceDue: true },
-            },
-          },
-        });
-        return NextResponse.json(updatedInvoice);
+
+    // If the calculated balance differs from stored balance, update it
+    if (Math.abs(correctedBalanceDue - invoice.balanceDue) > 0.01) {
+      // Update the invoice with corrected values
+      let newStatus: "PAID" | "PARTIAL" | "UNPAID";
+      if (correctedBalanceDue <= 0) {
+        newStatus = "PAID";
+      } else if (correctedBalanceDue < effectiveTotal) {
+        newStatus = "PARTIAL";
+      } else {
+        newStatus = "UNPAID";
       }
+
+      const updatedInvoice = await prisma.invoice.update({
+        where: { id },
+        data: {
+          totalAmount: effectiveTotal,
+          balanceDue: Math.max(0, correctedBalanceDue),
+          status: newStatus,
+        },
+        include: {
+          client: true,
+          items: { orderBy: { sNo: "asc" } },
+          paymentsReceived: {
+            include: {
+              createdBy: { select: { id: true, name: true } },
+            },
+            orderBy: { paymentDate: "desc" },
+          },
+          createdBy: { select: { id: true, name: true, email: true } },
+          updatedBy: { select: { id: true, name: true, email: true } },
+          previousInvoice: {
+            select: { id: true, invoiceNumber: true, balanceDue: true },
+          },
+        },
+      });
+      return NextResponse.json(updatedInvoice);
     }
 
     return NextResponse.json(invoice);

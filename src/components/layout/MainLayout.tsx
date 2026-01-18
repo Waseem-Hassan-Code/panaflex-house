@@ -30,11 +30,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   useEffect(() => {
     // Only redirect if component is mounted and unauthenticated
-    // We check mounted in the render, so this effect only runs when status changes
-    if (status === "unauthenticated") {
+    if (mounted && status === "unauthenticated") {
       router.replace("/login");
     }
-  }, [status, router]);
+  }, [mounted, status, router]);
 
   useEffect(() => {
     if (session?.user) {
@@ -51,8 +50,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
   }, [session, dispatch]);
 
   // Show loading state during initial mount or when session is loading
-  // This prevents hydration mismatch by ensuring consistent rendering
-  if (!mounted || status === "loading") {
+  // Only check status after component is mounted to prevent hydration mismatch
+  // On server, mounted is always false, so we always render loading initially
+  // On client, mounted starts as false, so initial render matches server
+  const showLoading = !mounted || (mounted && status === "loading");
+  const showContent = mounted && status !== "loading" && status !== "unauthenticated";
+
+  if (showLoading) {
     return (
       <Box
         sx={{
@@ -69,7 +73,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
     );
   }
 
-  if (status === "unauthenticated") {
+  if (!showContent) {
     return null;
   }
 

@@ -90,12 +90,18 @@ export default function DashboardPage() {
   }, [pinVerified]);
 
   // Show PIN dialog if not verified (required on every visit)
+  // But allow navigation away by closing the dialog
   if (!pinVerified) {
     return (
       <MainLayout>
         <PinDialog
           open={true}
           onSuccess={() => setPinVerifiedState(true)}
+          onClose={() => {
+            // Allow user to navigate away - don't block navigation
+            // The dialog will close and user can navigate to other pages
+            // If they come back, they'll need to enter PIN again
+          }}
           title="Dashboard Access"
           subtitle="Enter your PIN to view the dashboard"
         />
@@ -111,6 +117,9 @@ export default function DashboardPage() {
         >
           <Typography variant="h5" color="text.secondary">
             Dashboard is PIN protected
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            You can close this dialog to navigate away
           </Typography>
         </Box>
       </MainLayout>

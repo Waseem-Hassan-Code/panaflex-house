@@ -120,13 +120,22 @@ export interface LabourCost {
   updatedAt: Date;
 }
 
+export interface PaymentAllocation {
+  id: string;
+  paymentId: string;
+  invoiceId: string;
+  invoice?: Invoice;
+  amountApplied: number;
+  createdAt: Date;
+}
+
 export interface PaymentReceived {
   id: string;
   receiptNumber: string;
   clientId: string;
   client?: Client;
-  invoiceId: string;
-  invoice?: Invoice;
+  invoiceId?: string | null; // Optional: primary invoice if payment was made against specific invoice
+  invoice?: Invoice | null;
   amount: number;
   paymentDate: Date;
   paymentMethod: PaymentMethod;
@@ -135,6 +144,7 @@ export interface PaymentReceived {
   createdAt: Date;
   createdById: string;
   createdBy?: User;
+  allocations?: PaymentAllocation[]; // How this payment was allocated across invoices
 }
 
 export interface TransactionLog {

@@ -610,8 +610,9 @@ export default function ProfileForm() {
                   color="text.secondary"
                   sx={{ mb: 2 }}
                 >
-                  This action will permanently delete ALL clients and their
-                  associated invoices and payments. This cannot be undone.
+                  This action will permanently delete ALL data including clients,
+                  invoices, payments, transaction logs, and all non-admin users.
+                  Only admin users will be preserved. This cannot be undone.
                 </Typography>
                 <Button
                   variant="outlined"
@@ -644,8 +645,16 @@ export default function ProfileForm() {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={showDeleteConfirm}
-        title="Delete All Clients & Data"
-        message="Are you absolutely sure you want to delete ALL clients along with their invoices and payments? This action is IRREVERSIBLE and will permanently remove all client data from the system."
+        title="Delete All Data"
+        message="Are you absolutely sure you want to delete ALL data? This will permanently delete:
+        • All clients and their data
+        • All invoices and invoice items
+        • All payments received
+        • All transaction logs
+        • All labour costs
+        • All non-admin users
+        
+        Only admin users will be preserved. This action is IRREVERSIBLE!"
         confirmText="Yes, Delete Everything"
         onConfirm={handleDeleteAllData}
         onCancel={() => setShowDeleteConfirm(false)}

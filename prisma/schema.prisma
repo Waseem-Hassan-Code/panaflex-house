@@ -53,65 +53,65 @@ enum ActionType {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  password     String
-  role         Role     @default(VIEWER)
-  avatar       String?
-  phone        String?
-  address      String?
-  isActive     Boolean  @default(true)
-  isSeeded     Boolean  @default(false) // Mark seeded accounts
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(VIEWER)
+  avatar    String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  isSeeded  Boolean  @default(false) // Mark seeded accounts
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations for audit trail
-  createdClients    Client[]          @relation("ClientCreatedBy")
-  updatedClients    Client[]          @relation("ClientUpdatedBy")
-  createdInvoices   Invoice[]         @relation("InvoiceCreatedBy")
-  updatedInvoices   Invoice[]         @relation("InvoiceUpdatedBy")
-  createdPayments   PaymentReceived[] @relation("PaymentCreatedBy")
-  transactionLogs   TransactionLog[]
-  createdUsers      User[]            @relation("UserCreatedBy")
-  updatedUsers      User[]            @relation("UserUpdatedBy")
-  createdByUser     User?             @relation("UserCreatedBy", fields: [createdById], references: [id])
-  createdById       String?
-  updatedByUser     User?             @relation("UserUpdatedBy", fields: [updatedById], references: [id])
-  updatedById       String?
+  createdClients  Client[]          @relation("ClientCreatedBy")
+  updatedClients  Client[]          @relation("ClientUpdatedBy")
+  createdInvoices Invoice[]         @relation("InvoiceCreatedBy")
+  updatedInvoices Invoice[]         @relation("InvoiceUpdatedBy")
+  createdPayments PaymentReceived[] @relation("PaymentCreatedBy")
+  transactionLogs TransactionLog[]
+  createdUsers    User[]            @relation("UserCreatedBy")
+  updatedUsers    User[]            @relation("UserUpdatedBy")
+  createdByUser   User?             @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  updatedByUser   User?             @relation("UserUpdatedBy", fields: [updatedById], references: [id])
+  updatedById     String?
 
   @@map("users")
 }
 
 model Client {
-  id           String   @id @default(uuid())
-  clientId     String   @unique // Auto-generated: CLIENT_001, CLIENT_002, etc.
-  name         String
-  email        String?
-  phone        String
-  address      String?
-  cnic         String?
+  id            String  @id @default(uuid())
+  clientId      String  @unique // Auto-generated: CLIENT_001, CLIENT_002, etc.
+  name          String
+  email         String?
+  phone         String
+  address       String?
+  cnic          String?
   creditBalance Float   @default(0) // Overpayment balance to be adjusted in next invoice
-  
+
   // Membership fields
-  hasMembership       Boolean  @default(false)
-  membershipType      String?  // "FIXED" or "PERCENTAGE"
-  membershipDiscount  Float?   // Amount or percentage value
+  hasMembership       Boolean   @default(false)
+  membershipType      String? // "FIXED" or "PERCENTAGE"
+  membershipDiscount  Float? // Amount or percentage value
   membershipStartDate DateTime?
   membershipEndDate   DateTime?
-  membershipCardId    String?  @unique // Unique ID for QR code
-  
-  isActive     Boolean  @default(true)
-  isVerified   Boolean  @default(true) // False for imported clients without valid phone
-  isImported   Boolean  @default(false) // True for clients imported from Excel
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  membershipCardId    String?   @unique // Unique ID for QR code
+
+  isActive   Boolean  @default(true)
+  isVerified Boolean  @default(true) // False for imported clients without valid phone
+  isImported Boolean  @default(false) // True for clients imported from Excel
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Audit fields
-  createdById  String
-  createdBy    User     @relation("ClientCreatedBy", fields: [createdById], references: [id])
-  updatedById  String?
-  updatedBy    User?    @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
+  createdById String
+  createdBy   User    @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?   @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
 
   // Relations
   invoices         Invoice[]
@@ -121,62 +121,67 @@ model Client {
 }
 
 model Invoice {
-  id              String   @id @default(uuid())
-  invoiceNumber   String   @unique // Auto-generated: INV_001, INV_002, etc.
-  clientId        String
-  client          Client   @relation(fields: [clientId], references: [id])
-  invoiceDate     DateTime @default(now())
-  dueDate         DateTime?
-  
+  id            String    @id @default(uuid())
+  invoiceNumber String    @unique // Auto-generated: INV_001, INV_002, etc.
+  clientId      String
+  client        Client    @relation(fields: [clientId], references: [id])
+  invoiceDate   DateTime  @default(now())
+  dueDate       DateTime?
+
   // Amount calculations
-  subtotal        Float    @default(0)
-  discount        Float    @default(0) // Membership discount applied
-  previousBalance Float    @default(0) // Carried forward from previous invoices
-  totalAmount     Float    @default(0) // subtotal + previousBalance
-  paidAmount      Float    @default(0)
-  balanceDue      Float    @default(0) // totalAmount - paidAmount
-  
+  subtotal        Float @default(0)
+  discount        Float @default(0) // Membership discount applied
+  previousBalance Float @default(0) // Carried forward from previous invoices
+  totalAmount     Float @default(0) // subtotal + previousBalance
+  paidAmount      Float @default(0)
+  balanceDue      Float @default(0) // totalAmount - paidAmount
+
   // Status
-  status          InvoiceStatus @default(UNPAID)
-  balancePaidFromFutureInvoice Boolean @default(false) // True if balance was paid from a later invoice
-  
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status                       InvoiceStatus @default(UNPAID)
+  balancePaidFromFutureInvoice Boolean       @default(false) // True if balance was paid from a later invoice
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Audit fields
-  createdById     String
-  createdBy       User     @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
-  updatedById     String?
-  updatedBy       User?    @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
+  createdById String
+  createdBy   User    @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?   @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
 
   // Relations
-  items            InvoiceItem[]
-  paymentsReceived PaymentReceived[]
-  labourCosts      LabourCost[]
-  
-  // Reference to previous invoice if balance carried forward
+  items              InvoiceItem[]
+  paymentsReceived   PaymentReceived[]   @relation("PaymentToInvoice")
+  paymentAllocations PaymentAllocation[] // Payments allocated to this invoice
+  labourCosts        LabourCost[]
+
+  // Reference to previous invoice if balance carried forward (backward compatibility)
   previousInvoiceId String?
   previousInvoice   Invoice?  @relation("InvoiceCarryForward", fields: [previousInvoiceId], references: [id])
   nextInvoices      Invoice[] @relation("InvoiceCarryForward")
+
+  // Many-to-many relationship for tracking multiple previous invoices
+  previousInvoices InvoiceCarryForward[] @relation("PreviousInvoices")
+  nextInvoicesMany InvoiceCarryForward[] @relation("NextInvoices")
 
   @@map("invoices")
 }
 
 model InvoiceItem {
-  id          String   @id @default(uuid())
-  invoiceId   String
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  sNo         Int      // Serial number in the invoice
-  itemName    String
-  width       Float
-  height      Float
-  quantity    Int      @default(1)
-  sqf         Float    // Calculated: width * height * quantity
-  rate        Float    // Price per sqf
-  amount      Float    // Calculated: sqf * rate
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sNo       Int // Serial number in the invoice
+  itemName  String
+  width     Float
+  height    Float
+  quantity  Int      @default(1)
+  sqf       Float // Calculated: width * height * quantity
+  rate      Float // Price per sqf
+  amount    Float // Calculated: sqf * rate
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("invoice_items")
 }
@@ -186,31 +191,34 @@ model PaymentReceived {
   receiptNumber String        @unique // Auto-generated: REC_001, REC_002, etc.
   clientId      String
   client        Client        @relation(fields: [clientId], references: [id])
-  invoiceId     String
-  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
-  amount        Float
+  invoiceId     String? // Optional: primary invoice if payment was made against specific invoice
+  invoice       Invoice?      @relation("PaymentToInvoice", fields: [invoiceId], references: [id])
+  amount        Float // Total payment amount
   paymentDate   DateTime      @default(now())
   paymentMethod PaymentMethod @default(CASH)
-  reference     String?       // Cheque number, transaction ID, etc.
+  reference     String? // Cheque number, transaction ID, etc.
   notes         String?
   createdAt     DateTime      @default(now())
 
   // Audit fields (only created, not editable)
-  createdById   String
-  createdBy     User     @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+
+  // Relations
+  allocations PaymentAllocation[] // How this payment was allocated across invoices
 
   @@map("payments_received")
 }
 
 model TransactionLog {
-  id          String     @id @default(uuid())
-  entityType  EntityType // CLIENT, INVOICE, PAYMENT, USER
-  entityId    String     // ID of the entity
-  action      ActionType // CREATE, UPDATE, DELETE, PAYMENT_RECEIVED, STATUS_CHANGE
-  details     Json       // JSON data with change details
-  userId      String
-  user        User       @relation(fields: [userId], references: [id])
-  createdAt   DateTime   @default(now())
+  id         String     @id @default(uuid())
+  entityType EntityType // CLIENT, INVOICE, PAYMENT, USER
+  entityId   String // ID of the entity
+  action     ActionType // CREATE, UPDATE, DELETE, PAYMENT_RECEIVED, STATUS_CHANGE
+  details    Json // JSON data with change details
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  createdAt  DateTime   @default(now())
 
   @@index([entityType, entityId])
   @@index([userId])
@@ -220,9 +228,9 @@ model TransactionLog {
 
 // Sequence table for auto-generating IDs
 model Sequence {
-  id        String @id
-  value     Int    @default(0)
-  
+  id    String @id
+  value Int    @default(0)
+
   @@map("sequences")
 }
 
@@ -237,4 +245,36 @@ model LabourCost {
   updatedAt   DateTime @updatedAt
 
   @@map("labour_costs")
+}
+
+// Payment allocation: tracks how a payment is distributed across multiple invoices (FIFO)
+model PaymentAllocation {
+  id            String          @id @default(uuid())
+  paymentId     String
+  payment       PaymentReceived @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId     String
+  invoice       Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amountApplied Float // Amount from this payment applied to this invoice
+  createdAt     DateTime        @default(now())
+
+  @@unique([paymentId, invoiceId]) // One allocation per payment-invoice pair
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
+// Junction table for many-to-many invoice carry-forward relationships
+model InvoiceCarryForward {
+  id                String   @id @default(uuid())
+  nextInvoiceId     String // Invoice that carries forward the balance
+  previousInvoiceId String // Invoice whose balance is carried forward
+  amountCarried     Float // Amount carried forward from previous to next invoice
+  nextInvoice       Invoice  @relation("NextInvoices", fields: [nextInvoiceId], references: [id], onDelete: Cascade)
+  previousInvoice   Invoice  @relation("PreviousInvoices", fields: [previousInvoiceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@unique([nextInvoiceId, previousInvoiceId]) // One relationship per pair
+  @@index([nextInvoiceId])
+  @@index([previousInvoiceId])
+  @@map("invoice_carry_forward")
 }

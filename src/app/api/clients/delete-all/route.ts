@@ -18,45 +18,102 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete in order due to foreign key constraints:
-    // 1. First delete all payments
-    const paymentsDeleted = await prisma.paymentReceived.deleteMany({});
+    // Perform all deletions in a transaction to ensure data consistency
+    const result = await prisma.$transaction(async (tx) => {
+      // Delete in order due to foreign key constraints:
+      
+      // 1. Delete all transaction logs (including logs for clients, invoices, payments, etc.)
+      const logsDeleted = await tx.transactionLog.deleteMany({});
 
-    // 2. Delete all invoice items
-    await prisma.invoiceItem.deleteMany({});
+      // 2. Delete all labour costs
+      const labourCostsDeleted = await tx.labourCost.deleteMany({});
 
-    // 3. Delete all invoices
-    const invoicesDeleted = await prisma.invoice.deleteMany({});
+      // 3. Delete all payments received
+      const paymentsDeleted = await tx.paymentReceived.deleteMany({});
 
-    // 4. Delete all clients
-    const clientsDeleted = await prisma.client.deleteMany({});
+      // 4. Delete all invoice items
+      const invoiceItemsDeleted = await tx.invoiceItem.deleteMany({});
 
-    // Log this critical action
-    await prisma.transactionLog.create({
-      data: {
-        entityType: "CLIENT",
-        entityId: "BULK_DELETE",
-        action: "DELETE",
-        details: {
-          message: `Bulk deleted all clients`,
-          clientsDeleted: clientsDeleted.count,
-          invoicesDeleted: invoicesDeleted.count,
-          paymentsDeleted: paymentsDeleted.count,
+      // 5. Delete all invoices
+      const invoicesDeleted = await tx.invoice.deleteMany({});
+
+      // 6. Delete all clients
+      const clientsDeleted = await tx.client.deleteMany({});
+
+      // 7. Before deleting non-admin users, update any user references
+      // Find all non-admin user IDs first
+      const nonAdminUsers = await tx.user.findMany({
+        where: {
+          role: {
+            not: "ADMIN",
+          },
         },
-        userId: session.user.id,
-      },
+        select: { id: true },
+      });
+      const nonAdminUserIds = nonAdminUsers.map((u) => u.id);
+
+      // Set createdById and updatedById to null for any users (including admin users)
+      // that were created/updated by non-admin users
+      if (nonAdminUserIds.length > 0) {
+        await tx.user.updateMany({
+          where: {
+            OR: [
+              {
+                createdById: {
+                  in: nonAdminUserIds,
+                },
+              },
+              {
+                updatedById: {
+                  in: nonAdminUserIds,
+                },
+              },
+            ],
+          },
+          data: {
+            createdById: null,
+            updatedById: null,
+          },
+        });
+      }
+
+      // 8. Delete all non-admin users (keep only ADMIN role users)
+      const usersDeleted = await tx.user.deleteMany({
+        where: {
+          role: {
+            not: "ADMIN",
+          },
+        },
+      });
+
+      // 9. Reset all sequences to 0 to start fresh
+      await tx.sequence.updateMany({
+        data: { value: 0 },
+      });
+
+      return {
+        logsDeleted: logsDeleted.count,
+        labourCostsDeleted: labourCostsDeleted.count,
+        paymentsDeleted: paymentsDeleted.count,
+        invoiceItemsDeleted: invoiceItemsDeleted.count,
+        invoicesDeleted: invoicesDeleted.count,
+        clientsDeleted: clientsDeleted.count,
+        usersDeleted: usersDeleted.count,
+      };
     });
 
     return NextResponse.json({
       success: true,
-      clientsDeleted: clientsDeleted.count,
-      invoicesDeleted: invoicesDeleted.count,
-      paymentsDeleted: paymentsDeleted.count,
+      message: "All data deleted successfully. Admin users have been preserved.",
+      ...result,
     });
   } catch (error) {
-    console.error("Error deleting all clients:", error);
+    console.error("Error deleting all data:", error);
     return NextResponse.json(
-      { error: "Failed to delete all data" },
+      { 
+        error: "Failed to delete all data",
+        details: error instanceof Error ? error.message : "Unknown error"
+      },
       { status: 500 }
     );
   }

@@ -18,6 +18,7 @@ import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 interface PinDialogProps {
   open: boolean;
   onSuccess: () => void;
+  onClose?: () => void; // Optional: allows closing dialog without entering PIN
   title?: string;
   subtitle?: string;
 }
@@ -70,6 +71,7 @@ export function clearPinVerification(): void {
 export default function PinDialog({
   open,
   onSuccess,
+  onClose,
   title = "Enter PIN",
   subtitle = "Please enter your PIN to access the dashboard",
 }: PinDialogProps) {
@@ -161,6 +163,7 @@ export default function PinDialog({
   return (
     <Dialog
       open={open}
+      onClose={onClose} // Allow closing dialog (enables navigation away)
       maxWidth="xs"
       fullWidth
       PaperProps={{

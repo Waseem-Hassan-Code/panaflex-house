@@ -23,6 +23,9 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogContent,
+  DialogTitle,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AddIcon from "@mui/icons-material/Add";
@@ -72,6 +75,7 @@ export default function ClientDetailPage({
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
   const [showDeletePaymentDialog, setShowDeletePaymentDialog] = useState(false);
+  const [showNoBalanceDialog, setShowNoBalanceDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [selectedPayment, setSelectedPayment] =
     useState<PaymentReceived | null>(null);
@@ -100,6 +104,20 @@ export default function ClientDetailPage({
   }, [fetchClient]);
 
   const handleReceivePayment = (invoice: Invoice) => {
+    // Check if invoice has actual balance due and is not paid from future invoice
+    if (
+      invoice.balanceDue <= 0 ||
+      invoice.balancePaidFromFutureInvoice ||
+      invoice.status === "PAID" ||
+      invoice.status === "CANCELLED"
+    ) {
+      setShowNoBalanceDialog(true);
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => {
+        setShowNoBalanceDialog(false);
+      }, 3000);
+      return;
+    }
     setSelectedInvoice(invoice);
     setShowPaymentDialog(true);
   };
@@ -264,16 +282,31 @@ export default function ClientDetailPage({
           variant="outlined"
           startIcon={<PaymentIcon />}
           onClick={() => {
+            // Find invoice with actual balance due that's not paid from future invoice
             const unpaidInvoice = client.invoices?.find(
-              (inv) => inv.status !== "PAID" && inv.status !== "CANCELLED"
+              (inv) =>
+                inv.status !== "PAID" &&
+                inv.status !== "CANCELLED" &&
+                inv.balanceDue > 0 &&
+                !inv.balancePaidFromFutureInvoice
             );
             if (unpaidInvoice) {
               handleReceivePayment(unpaidInvoice);
+            } else {
+              // No invoice with balance due
+              setShowNoBalanceDialog(true);
+              setTimeout(() => {
+                setShowNoBalanceDialog(false);
+              }, 3000);
             }
           }}
           disabled={
             !client.invoices?.some(
-              (inv) => inv.status !== "PAID" && inv.status !== "CANCELLED"
+              (inv) =>
+                inv.status !== "PAID" &&
+                inv.status !== "CANCELLED" &&
+                inv.balanceDue > 0 &&
+                !inv.balancePaidFromFutureInvoice
             )
           }
         >
@@ -706,6 +739,73 @@ export default function ClientDetailPage({
         loading={deleting}
         confirmColor="error"
       />
+
+      {/* No Balance Dialog */}
+      <Dialog
+        open={showNoBalanceDialog}
+        onClose={() => setShowNoBalanceDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            textAlign: "center",
+            pb: 1,
+            pt: 3,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                bgcolor: "success.light",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <PaymentIcon sx={{ fontSize: 32, color: "success.main" }} />
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: "center", pb: 4 }}>
+          <Typography variant="h5" fontWeight="bold" gutterBottom>
+            No Balance to Pay
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+            All invoices for this client have been fully paid. There is no
+            outstanding balance to receive payment for.
+          </Typography>
+          <Box
+            sx={{
+              mt: 3,
+              p: 2,
+              bgcolor: "success.light",
+              borderRadius: 2,
+              display: "inline-block",
+            }}
+          >
+            <Typography variant="h6" color="success.dark" fontWeight="bold">
+              All Clear! ✓
+            </Typography>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

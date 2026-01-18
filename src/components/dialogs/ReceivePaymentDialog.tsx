@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -16,12 +16,13 @@ import {
 } from "@mui/material";
 import { toast } from "sonner";
 import { Client, Invoice } from "@/types";
+import PaymentAllocationAnimation from "@/components/payments/PaymentAllocationAnimation";
 
 interface ReceivePaymentDialogProps {
   open: boolean;
   onClose: () => void;
   client: Client;
-  invoice: Invoice;
+  invoice?: Invoice; // Optional: if not provided, payment will be allocated FIFO to all unpaid invoices
   onSuccess: () => void;
 }
 
@@ -34,12 +35,37 @@ export default function ReceivePaymentDialog({
   invoice,
   onSuccess,
 }: ReceivePaymentDialogProps) {
-  const [amount, setAmount] = useState(invoice.balanceDue.toString());
+  const [amount, setAmount] = useState(
+    invoice?.balanceDue.toString() || "0"
+  );
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllocation, setShowAllocation] = useState(false);
+  const [allocationData, setAllocationData] = useState<{
+    allocations: Array<{
+      invoiceId: string;
+      invoiceNumber: string;
+      amountApplied: number;
+      previousBalance: number;
+      newBalance: number;
+      newStatus: string;
+    }>;
+    totalAllocated: number;
+    creditAdded: number;
+  } | null>(null);
+
+  // Reset state when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setAmount(invoice?.balanceDue.toString() || "0");
+      setShowAllocation(false);
+      setAllocationData(null);
+      setError(null);
+    }
+  }, [open, invoice]);
 
   const handleSubmit = async () => {
     const paymentAmount = parseFloat(amount);
@@ -61,7 +87,7 @@ export default function ReceivePaymentDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: client.id,
-          invoiceId: invoice.id,
+          invoiceId: invoice?.id, // Optional: for backward compatibility
           amount: paymentAmount,
           paymentMethod,
           reference,
@@ -75,12 +101,28 @@ export default function ReceivePaymentDialog({
       }
 
       const data = await response.json();
-      toast.success("Payment Received Successfully!", {
-        description: `Receipt: ${
-          data.receiptNumber
-        } | Amount: Rs. ${paymentAmount.toLocaleString()}`,
-      });
-      onSuccess();
+      
+      // Show allocation animation if there are allocations
+      if (data.allocations && data.allocations.length > 0) {
+        setAllocationData({
+          allocations: data.allocations,
+          totalAllocated: data.totalAllocated || 0,
+          creditAdded: data.creditAdded || 0,
+        });
+        setShowAllocation(true);
+      } else {
+        toast.success("Payment Received Successfully!", {
+          description: `Receipt: ${
+            data.payment?.receiptNumber || data.receiptNumber
+          } | Amount: Rs. ${paymentAmount.toLocaleString()}${
+            data.creditAdded > 0
+              ? ` | Credit: Rs. ${data.creditAdded.toLocaleString()}`
+              : ""
+          }`,
+        });
+        onSuccess();
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       toast.error("Failed to receive payment", {
@@ -90,6 +132,42 @@ export default function ReceivePaymentDialog({
       setLoading(false);
     }
   };
+
+  const handleAllocationComplete = () => {
+    toast.success("Payment Received Successfully!", {
+      description: `Receipt: ${
+        allocationData?.allocations[0]?.invoiceNumber || "Payment"
+      } | Amount: Rs. ${parseFloat(amount).toLocaleString()}${
+        allocationData && allocationData.creditAdded > 0
+          ? ` | Credit: Rs. ${allocationData.creditAdded.toLocaleString()}`
+          : ""
+      }`,
+    });
+    onSuccess();
+    setTimeout(() => {
+      onClose();
+    }, 500);
+  };
+
+  if (showAllocation && allocationData) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>Payment Allocation</DialogTitle>
+        <DialogContent>
+          <PaymentAllocationAnimation
+            allocations={allocationData.allocations}
+            totalAllocated={allocationData.totalAllocated}
+            creditAdded={allocationData.creditAdded}
+            totalAmount={parseFloat(amount)}
+            onComplete={handleAllocationComplete}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -107,33 +185,43 @@ export default function ReceivePaymentDialog({
             </Typography>
           </Box>
 
-          <Box sx={{ bgcolor: "grey.100", p: 2, borderRadius: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Invoice
-            </Typography>
-            <Typography fontWeight={500}>{invoice.invoiceNumber}</Typography>
-            <Divider sx={{ my: 1 }} />
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Total Amount:</Typography>
-              <Typography variant="body2" fontWeight={500}>
-                Rs. {invoice.totalAmount.toLocaleString()}
+          {invoice && (
+            <Box sx={{ bgcolor: "grey.100", p: 2, borderRadius: 1 }}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Invoice (Optional - Payment will be allocated FIFO to all unpaid
+                invoices)
               </Typography>
+              <Typography fontWeight={500}>{invoice.invoiceNumber}</Typography>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body2">Total Amount:</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  Rs. {invoice.totalAmount.toLocaleString()}
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body2">Paid Amount:</Typography>
+                <Typography variant="body2" color="success.main">
+                  Rs. {invoice.paidAmount.toLocaleString()}
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body2" fontWeight={500}>
+                  Balance Due:
+                </Typography>
+                <Typography variant="body2" color="error.main" fontWeight={500}>
+                  Rs. {invoice.balanceDue.toLocaleString()}
+                </Typography>
+              </Box>
             </Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Paid Amount:</Typography>
-              <Typography variant="body2" color="success.main">
-                Rs. {invoice.paidAmount.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2" fontWeight={500}>
-                Balance Due:
-              </Typography>
-              <Typography variant="body2" color="error.main" fontWeight={500}>
-                Rs. {invoice.balanceDue.toLocaleString()}
-              </Typography>
-            </Box>
-          </Box>
+          )}
+
+          {!invoice && (
+            <Alert severity="info">
+              Payment will be allocated to unpaid invoices using FIFO (First-In-First-Out)
+              method, starting from the oldest invoice.
+            </Alert>
+          )}
 
           <TextField
             label="Amount"
@@ -145,7 +233,11 @@ export default function ReceivePaymentDialog({
             InputProps={{
               startAdornment: <Typography sx={{ mr: 1 }}>Rs.</Typography>,
             }}
-            helperText={`Balance: Rs. ${invoice.balanceDue.toLocaleString()} (overpayments will be added to credit balance)`}
+            helperText={
+              invoice
+                ? `Balance: Rs. ${invoice.balanceDue.toLocaleString()} (overpayments will be added to credit balance)`
+                : "Payment will be allocated to unpaid invoices (FIFO). Overpayments will be added to credit balance."
+            }
           />
 
           <TextField
