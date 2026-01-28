@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         membershipDiscount: number;
         membershipType: string | null;
         membershipEndDate: Date | null;
-        invoices: { id: string; balanceDue: number }[];
+        invoices: { id: string; balanceDue: number; status: string; balancePaidFromFutureInvoice: boolean | null }[];
       };
       let isNewClient = false;
 
@@ -78,6 +78,12 @@ export async function POST(request: NextRequest) {
                 status: { in: ["UNPAID", "PARTIAL"] },
                 // Exclude invoices that were already paid from a future invoice
                 balancePaidFromFutureInvoice: { not: true },
+              },
+              select: {
+                id: true,
+                balanceDue: true,
+                status: true,
+                balancePaidFromFutureInvoice: true,
               },
               orderBy: { createdAt: "desc" },
             },
@@ -381,7 +387,7 @@ export async function POST(request: NextRequest) {
             let currentInvoiceId: string | null = invoice.id;
             
             while (currentInvoiceId) {
-              const currentInv = await tx.invoice.findUnique({
+              const currentInv: { previousInvoiceId: string | null } | null = await tx.invoice.findUnique({
                 where: { id: currentInvoiceId },
                 select: { previousInvoiceId: true },
               });
