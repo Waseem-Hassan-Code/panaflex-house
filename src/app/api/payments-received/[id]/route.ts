@@ -89,7 +89,7 @@ export async function PUT(
         userId: session.user.id,
         details: {
           receiptNumber: payment.receiptNumber,
-          invoiceNumber: payment.invoice.invoiceNumber,
+          invoiceNumber: payment.invoice?.invoiceNumber,
           clientName: payment.client.name,
           changes: { paymentMethod, reference, notes },
         },
@@ -134,12 +134,12 @@ export async function DELETE(
     // Delete payment and update invoice in transaction
     await prisma.$transaction(async (tx) => {
       // Update invoice
-      const newPaidAmount = payment.invoice.paidAmount - payment.amount;
-      const newBalanceDue = payment.invoice.totalAmount - newPaidAmount;
+      const newPaidAmount = payment.invoice!.paidAmount - payment.amount;
+      const newBalanceDue = payment.invoice!.totalAmount - newPaidAmount;
       const newStatus = newPaidAmount <= 0 ? "UNPAID" : "PARTIAL";
 
       await tx.invoice.update({
-        where: { id: payment.invoiceId },
+        where: { id: payment.invoiceId! },
         data: {
           paidAmount: Math.max(0, newPaidAmount),
           balanceDue: newBalanceDue,
@@ -162,7 +162,7 @@ export async function DELETE(
           userId: session.user.id,
           details: {
             receiptNumber: payment.receiptNumber,
-            invoiceNumber: payment.invoice.invoiceNumber,
+            invoiceNumber: payment.invoice!.invoiceNumber,
             clientName: payment.client.name,
             amount: payment.amount,
             reason: "Payment deleted",

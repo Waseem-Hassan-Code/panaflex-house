@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
         id: p.id,
         title: `${p.receiptNumber} - ${p.client.name}`,
         subtitle: `Rs. ${p.amount.toLocaleString()} for ${
-          p.invoice.invoiceNumber
+          p.invoice!.invoiceNumber
         }`,
         url: `/payments/${p.id}`,
       })),
